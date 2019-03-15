@@ -23,26 +23,24 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
- * Wave_Source SOP
+ * Create_Source SOP
  */
 
 
-#ifndef __SOP_Solve_FS_h__
-#define __SOP_Solve_FS_h__
+#ifndef __SOP_Create_Source_h__
+#define __SOP_Create_Source_h__
 
 #include <SOP/SOP_Node.h>
-#include "definitions.hpp"
-#include <Eigen/SVD>
 
 namespace HDK_Sample {
 
 /// Pure C++ implementation of @ref SOP_HOMWave
 /// @see SOP_HOMWave, vex_wave(), @ref HOM/SOP_HOMWave.py
-class SOP_Solve_FS : public SOP_Node
+class SOP_Create_Source : public SOP_Node
 {
 public:
-    SOP_Solve_FS(OP_Network *net, const char *name, OP_Operator *op);
-    virtual ~SOP_Solve_FS();
+    SOP_Create_Source(OP_Network *net, const char *name, OP_Operator *op);
+    virtual ~SOP_Create_Source();
 
     static PRM_Template myTemplateList[];
     static OP_Node *myConstructor(OP_Network*, const char *, OP_Operator *);
@@ -56,7 +54,16 @@ public:
 protected:
     virtual OP_ERROR cookMySop(OP_Context &context);
 private:
-    void        getGroups(UT_String &str){ evalString(str, "group", 0, 0); }
+  void        getGroups(UT_String &str){ evalString(str, "group", 0, 0); }
+  fpreal      AMP(fpreal t)            { return evalFloat("amp", 0, t); }
+  fpreal      PHASE(fpreal t)          { return evalFloat("phase", 0, t); }
+  fpreal      WL_MIN(fpreal t)             { return evalFloat("wl_min", 0, t); }
+  fpreal      WL_MAX(fpreal t)             { return evalFloat("wl_max", 0, t); }
+  fpreal      WL_STEP(fpreal t)             { return evalFloat("wl_step", 0, t); }
+  int         TYPE(fpreal t) {return evalInt("type", 0, t);}
+  fpreal      X(fpreal t) { return evalFloat("pos", 0, t); }
+  fpreal      Y(fpreal t) { return evalFloat("pos", 1, t); }
+  fpreal      Z(fpreal t) { return evalFloat("pos", 2, t); }
 
     /// This is the group of geometry to be manipulated by this SOP and cooked
     /// by the method "cookInputGroups".
@@ -64,15 +71,6 @@ private:
 
   int gdp_count;
   UT_Array<const GU_Detail*> myGDPLists;
-  Eigen::BDCSVD<MatrixXcf> svd_T;
-  
-  // struct variables_wl {
-  //   float wl;
-  //   int startoff, endoff;
-  //   Eigen::BDCSVD<MatrixXcf> svd_T;
-  //   VectorXcf p_in;
-  // }; //variables_wl
-  // UT_Array<variables_wl> list_wavelength;
 };
 } // End of HDK_Sample namespace
 

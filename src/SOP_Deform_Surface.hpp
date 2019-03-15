@@ -23,26 +23,24 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
- * Wave_Source SOP
+ * Deform_Surface SOP
  */
 
 
-#ifndef __SOP_Solve_FS_h__
-#define __SOP_Solve_FS_h__
+#ifndef __SOP_Deform_Surface_h__
+#define __SOP_Deform_Surface_h__
 
 #include <SOP/SOP_Node.h>
-#include "definitions.hpp"
-#include <Eigen/SVD>
 
 namespace HDK_Sample {
 
 /// Pure C++ implementation of @ref SOP_HOMWave
 /// @see SOP_HOMWave, vex_wave(), @ref HOM/SOP_HOMWave.py
-class SOP_Solve_FS : public SOP_Node
+class SOP_Deform_Surface : public SOP_Node
 {
 public:
-    SOP_Solve_FS(OP_Network *net, const char *name, OP_Operator *op);
-    virtual ~SOP_Solve_FS();
+    SOP_Deform_Surface(OP_Network *net, const char *name, OP_Operator *op);
+    virtual ~SOP_Deform_Surface();
 
     static PRM_Template myTemplateList[];
     static OP_Node *myConstructor(OP_Network*, const char *, OP_Operator *);
@@ -57,6 +55,7 @@ protected:
     virtual OP_ERROR cookMySop(OP_Context &context);
 private:
     void        getGroups(UT_String &str){ evalString(str, "group", 0, 0); }
+    fpreal      AMP(fpreal t)           { return evalFloat("amp", 0, t); }
 
     /// This is the group of geometry to be manipulated by this SOP and cooked
     /// by the method "cookInputGroups".
@@ -64,15 +63,6 @@ private:
 
   int gdp_count;
   UT_Array<const GU_Detail*> myGDPLists;
-  Eigen::BDCSVD<MatrixXcf> svd_T;
-  
-  // struct variables_wl {
-  //   float wl;
-  //   int startoff, endoff;
-  //   Eigen::BDCSVD<MatrixXcf> svd_T;
-  //   VectorXcf p_in;
-  // }; //variables_wl
-  // UT_Array<variables_wl> list_wavelength;
 };
 } // End of HDK_Sample namespace
 
