@@ -28,7 +28,7 @@
 /// This is the pure C++ implementation of the wave SOP.
 /// @see @ref HOM/SOP_HOMWave.py, @ref HOM/SOP_HOMWaveNumpy.py, @ref HOM/SOP_HOMWaveInlinecpp.py, @ref HOM/SOP_HOMWave.C, @ref SOP/SOP_VEXWave.vfl
 
-#include "SOP_CircleObstacle_Src.hpp"
+#include "SOP_TextureObstacle_Src.hpp"
 
 #include <GU/GU_Detail.h>
 #include <GA/GA_Handle.h>
@@ -42,6 +42,7 @@
 
 #include "definitions.hpp"
 #include <vector>
+#include <string>
 
 using namespace HDK_Sample;
 
@@ -49,10 +50,10 @@ void
 newSopOperator(OP_OperatorTable *table)
 {
   table->addOperator(new OP_Operator(
-				     "circle_obstacle_src_fs",
-				     "Circle Obstacle Sources FS",
-				     SOP_Circle_Obstacle_Src::myConstructor,
-				     SOP_Circle_Obstacle_Src::myTemplateList,
+				     "texture_obstacle_src_fs",
+				     "Texture Obstacle_Src Sources FS",
+				     SOP_Texture_Obstacle_Src::myConstructor,
+				     SOP_Texture_Obstacle_Src::myTemplateList,
 				     1,
 				     1,
 				     nullptr,  
@@ -62,32 +63,31 @@ static PRM_Name names[] = {
   PRM_Name("center",  "Center"),
   PRM_Name("off",     "Offset distance"),
   PRM_Name("density",   "Density"),
-  PRM_Name("radius",   "Radius"),
+   PRM_Name("file",   "Texture File"),
 };
 
 PRM_Default* off_default = new PRM_Default(0.3);
 PRM_Default* dens_default = new PRM_Default(3);
 
 PRM_Template
-SOP_Circle_Obstacle_Src::myTemplateList[] = {
+SOP_Texture_Obstacle_Src::myTemplateList[] = {
   PRM_Template(PRM_STRING,    1, &PRMgroupName, 0, &SOP_Node::pointGroupMenu,
-	       0, 0, SOP_Node::getGroupSelectButton(
-						    GA_GROUP_POINT)),
+  	       0, 0, SOP_Node::getGroupSelectButton(GA_GROUP_POINT)),
   PRM_Template(PRM_XYZ_J,     3, &names[0], PRMzeroDefaults),
   PRM_Template(PRM_FLT_J,     1, &names[1], off_default),
   PRM_Template(PRM_FLT_J,     1, &names[2], dens_default),
-  PRM_Template(PRM_FLT_J,     1, &names[3], PRMoneDefaults),
+   PRM_Template(PRM_PICFILE,   1, &names[3], PRMzeroDefaults),
   PRM_Template(),
 };
 
 
 OP_Node *
-SOP_Circle_Obstacle_Src::myConstructor(OP_Network *net, const char *name, OP_Operator *op)
+SOP_Texture_Obstacle_Src::myConstructor(OP_Network *net, const char *name, OP_Operator *op)
 {
-  return new SOP_Circle_Obstacle_Src(net, name, op);
+  return new SOP_Texture_Obstacle_Src(net, name, op);
 }
 
-SOP_Circle_Obstacle_Src::SOP_Circle_Obstacle_Src(OP_Network *net, const char *name, OP_Operator *op)
+SOP_Texture_Obstacle_Src::SOP_Texture_Obstacle_Src(OP_Network *net, const char *name, OP_Operator *op)
   : SOP_Node(net, name, op)
 {
   // This indicates that this SOP manually manages its data IDs,
@@ -103,11 +103,11 @@ SOP_Circle_Obstacle_Src::SOP_Circle_Obstacle_Src(OP_Network *net, const char *na
   mySopFlags.setManagesDataIDs(true);
 }
 
-SOP_Circle_Obstacle_Src::~SOP_Circle_Obstacle_Src()
+SOP_Texture_Obstacle_Src::~SOP_Texture_Obstacle_Src()
 {
 }
 OP_ERROR
-SOP_Circle_Obstacle_Src::cookInputGroups(OP_Context &context, int alone)
+SOP_Texture_Obstacle_Src::cookInputGroups(OP_Context &context, int alone)
 {
   // The SOP_Node::cookInputPointGroups() provides a good default
   // implementation for just handling a point selection.
@@ -128,9 +128,17 @@ SOP_Circle_Obstacle_Src::cookInputGroups(OP_Context &context, int alone)
 			      );
 }
 
+void SOP_Texture_Obstacle_Src::loadTexture() {
+  UT_String str;
+  FILE(str, 0);
+  height_field = IMG_Load(str);
+  
+
+}
+
 
 OP_ERROR
-SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
+SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
 {
   // Flag the SOP as being time dependent (i.e. cook on time changes)
   flags().timeDep = 0;
@@ -172,29 +180,38 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
     float wl = wave_lengths[w];
     float density = DENSITY(t)/wl;
     float off = OFF(t);
-    float radius = RADIUS(t) - off;;
-    int nb_points = 2*M_PI*radius*density;
-    float angle_step = 2*M_PI/nb_points;
-
-    VEC3 dir(1, 0, 0);
-    VEC3 center(CX(t), CY(t), CZ(t));
-    MAT3 rotation;
-    rotation <<
-      cos(angle_step), 0, -sin(angle_step),
-      0, 0, 0, 
-      sin(angle_step), 0, cos(angle_step);
-
-    GA_Offset ptoff = gdp->appendPointBlock(nb_points);
-    GA_Offset vtxoff;
-    GA_Offset prim_off = gdp->appendPrimitivesAndVertices(GA_PRIMPOLY, 1, nb_points, vtxoff, true);
-    for (int i = 0; i < nb_points;  ++i) {
-      VEC3 pos = center + radius*dir;
-      //      std::cout<<"pos "<<pos(0)<<" "<<pos(1)<<" "<<pos(2)<<std::endl;
-      gdp->getTopology().wireVertexPoint(vtxoff+i,ptoff+i);
-      gdp->setPos3(ptoff+i, UT_Vector3(pos(0), pos(1), pos(2)));
-      dir = rotation*dir;
-      dir.normalize();
-    }
+  //   float width = WIDTH(t) - 2*off;;
+  //   float length = LENGTH(t) - 2*off;;
+  //   int nb_points_w = width*density + 1;
+  //   int nb_points_l = length*density + 1;
+ 
+  //   VEC3 center(CX(t), CY(t), CZ(t));
+  //   std::vector<VEC3> corners(4);
+  //   corners[0] = center + VEC3(width/2.0, 0, length/2.0);
+  //   corners[1] = center + VEC3(-width/2.0, 0, length/2.0);
+  //   corners[2] = center + VEC3(-width/2.0, 0, -length/2.0);
+  //   corners[3] = center + VEC3(width/2.0, 0, -length/2.0);
+  //   GA_Offset ptoff = gdp->appendPointBlock(2*nb_points_w + 2*nb_points_l);
+  //   GA_Offset vtxoff;
+  //   GA_Offset prim_off = gdp->appendPrimitivesAndVertices(GA_PRIMPOLY, 1, 2*nb_points_w + 2*nb_points_l, vtxoff, true);
+  //   std::cout<<"nb point l and w "<<nb_points_l<<" "<<nb_points_w<<std::endl;
+  //   int i = 0;
+  //   for (int c = 0; c < 4; ++c) {
+      
+  //     VEC3 dir = corners[(c+1)%4] - corners[c];
+  //     float l = dir.norm();
+  //     int nb_points = l*density + 1;
+  //     std::cout<<"nb point C "<<nb_points<<" "<<c<<std::endl;
+  //     float step = 1.0/(float)nb_points;
+  //     float d = 0;
+  //     for (int j = 0; j < nb_points;  ++i, ++j) {
+  // 	VEC3 pos =  corners[c] + d*dir;
+  // 	std::cout<<"pos "<<pos(0)<<" "<<pos(1)<<" "<<pos(2)<<" "<<i<<std::endl;
+  // 	gdp->getTopology().wireVertexPoint(vtxoff+i,ptoff+i);
+  // 	gdp->setPos3(ptoff+i, UT_Vector3(pos(0), pos(1), pos(2)));
+  // 	d += step; 
+  //     }
+  //   }
 
   }
 
