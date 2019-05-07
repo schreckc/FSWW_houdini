@@ -134,8 +134,8 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
   
   //   gdp->clearAndDestroy();
   duplicateSource(0, context);
-  //fpreal frame = OPgetDirector()->getChannelManager()->getSample(context.getTime());
-  //  frame *= 0.03;
+  fpreal frame = OPgetDirector()->getChannelManager()->getSample(context.getTime());
+  frame *= 0.03;
   float t = context.getTime();
   int fr = context.getFrame();
   float dt = 0.25;
@@ -153,9 +153,12 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
   //  int nb_fs = fsi->getNumPoints(); //should be diff for each freq
 
   //
-  myISLists[gdp_count] = is;
-    
-  if (fr <= 1) {
+  myISLists[gdp_count] = new GU_Detail(is);
+  // myGDPLists[gdp_count] = new GU_Detail(gdp);
+  // ++gdp_count;  //moved at the end of the function
+
+  
+  if (fr == 1) {
     wave_lengths = std::vector<float>(nb_wl);
     ampli_steps = std::vector<int>(nb_wl);
     p_in = std::vector<VectorXcf>(nb_wl);
@@ -192,6 +195,7 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
     for(GA_Iterator itfs = range_fs.begin(); itfs != range_fs.end(); ++itfs) {
       UT_Vector3 pos_fs = gdp->getPos3(*itfs);
       i = 0;
+      uint nb_bp = 0;
       for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
 	UT_Vector3 pos_b = bp->getPos3(*itbp);
 	float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
@@ -199,15 +203,18 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
 	float q = interpolation(ret, 0, dt);
 	//	std::cout<<"i j "<<i<<" "<<j<<" "<<nb_fs<<" "<<nb_bp<<" "<<k<<" "<<r<<" "<<pos_b(0)<<" "<<pos_fs(0)<<std::endl;
 	if (q > 0) {
+	  q = 1;
 	  T(i, j) = q*fund_solution(k*r);
+	  ++nb_bp;
 	} else {
 	  T(i, j) = 0;
 	}
 	++i;
       }
+      std::cout<<"nb bp infuenced "<<nb_bp<<" "<<j<<std::endl;
       ++j;
     }
-    // std::cout<<T<<std::endl;
+    //    std::cout<<T<<std::endl;
     svd[w] =  BDCSVD<MatrixXcf>(T,ComputeThinU | ComputeThinV);
   }
   }
@@ -217,6 +224,10 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
     // fill the p_in for each frequencies
   GA_ROHandleF a_handle(is->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2));
   for (int w = 0; w < nb_wl; ++w) {
+    int as = ampli_steps[w];
+    // std::cout<<"frame as "<<fr<<" "<<as<<std::endl;
+    // if (fr%as == 0) {
+      
     float wl = wave_lengths[w];
     float k = M_PI*2.0/wl;
     int i = 0;
@@ -236,9 +247,9 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
       	 float v = velocity(k);
       	 fpreal t_ret = t - r/v;
       	 OP_Context c_ret(t_ret);
-      	 int f_ret = t_ret/dt;
+      	 int f_ret = floor(t_ret/dt);
       	 float ar = 0, ai = 0;
-      	  if (f_ret >= 0) {
+      	  if (f_ret >= 1) {
       	   const GU_Detail *fs_ret = myISLists[f_ret]; 
       	   afs = fs_ret->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2);
       	   tuple = afs->getAIFTuple();
@@ -246,29 +257,32 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
       	   tuple->get(afs, *it, ai, 1);
       	 }
       	  std::complex<float> ampli(ar, ai);
-      	 p_in[w](i) -= ampli*fund_solution(k*r);
+	  p_in[w](i) -= ampli*fund_solution(k*r);
       }
-      //      add contribution from other sources of the obstacle
+      // //      add contribution from other sources of the obstacle
       const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
       GA_Range range = prim->getPointRange();
       for(GA_Iterator it = range.begin(); it != range.end(); ++it) {
       	UT_Vector3 pos_fs = gdp->getPos3(*it);
       	 float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
       	float ret = r/velocity(k);
-      	int f_ret = (t - ret)/dt;
-      	float q = interpolation(ret, 0, dt);
+      	int f_ret = floor((t - ret)/(dt));
+	if (ret > t) {
+	  --f_ret;
+	}
+      	float q = interpolation(ret, 0, (dt));
       	float ar = 0, ai = 0;
       	if (q <= 0) {
       	   if (f_ret >= 0) {
-	     //std::cout<<"f_ret "<<f_ret<<"  "<<*it<<" "<<*itbp<<std::endl;
-      	     const GU_Detail *fs_ret = myGDPLists[f_ret]; 
-      	     afs = fs_ret->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2);
-      	     tuple = afs->getAIFTuple();
-      	     tuple->get(afs, *it, ar, 0);
-      	     tuple->get(afs, *it, ai, 1);
-      	   }
+	     const GU_Detail *fs_ret = myGDPLists[f_ret]; 
+      	      afs = fs_ret->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2);
+      	      tuple = afs->getAIFTuple();
+      	      tuple->get(afs, *it, ar, 0);
+      	      tuple->get(afs, *it, ai, 1);
+	      //      std::cout<<"f_ret "<<f_ret<<"  "<<*it<<" "<<*itbp<<" "<<t<<" "<<ret<<" ("<<ar<<","<<ai<<")"<<std::endl;
+      	    }
       	  COMPLEX a(ar, ai);
-      	  p_in[w](i) -= 0.8f*a*fund_solution(k*r);
+	    p_in[w](i) -= 0.8f*a*fund_solution(k*r);
       	} else {
       	  if (f_ret >= 1) {
       	    const GU_Detail *fs_ret_prev = myGDPLists[f_ret-1]; 
@@ -278,18 +292,22 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
       	    tuple->get(afs, *it, ai, 1);
       	  }
       	  COMPLEX a_prev(ar, ai);
-      	  COMPLEX ampli = (1-q)*a_prev;
-      	  p_in[w](i) -= ampli*fund_solution(k*r);
+	  //COMPLEX ampli = (1-q)*a_prev;
+	  //COMPLEX ampli = a_prev;
+	  // p_in[w](i) -= ampli*fund_solution(k*r);
       	}
       }
        ++i;
   }
     //    std::cout<<p_in[w]<<std::endl;
+    // }
   }
   
   // solve for each frequencies
   GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2));
   for (int w = 0; w < nb_wl; ++w) {
+    int as = ampli_steps[w];
+    // if (fr%as == 0) {
     // float wl = wave_lengths[w];
     // float k = M_PI*2.0/wl;
     const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
@@ -304,12 +322,13 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
       ampli_attrib.set(*it, 0, real(c[i]));
       ampli_attrib.set(*it, 1, imag(c[i]));
     }
+    // }
   }
+ 
+  myGDPLists[gdp_count] = new GU_Detail(gdp);
+  ++gdp_count;
   ampli_attrib.bumpDataId();
   
-  myGDPLists[gdp_count] = gdp;
-  ++gdp_count;
-      
   return error();
 }
 

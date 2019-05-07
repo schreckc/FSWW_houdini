@@ -84,6 +84,7 @@ SOP_Texture_Obstacle_Src::myTemplateList[] = {
 OP_Node *
 SOP_Texture_Obstacle_Src::myConstructor(OP_Network *net, const char *name, OP_Operator *op)
 {
+    std::cout<<"const "<<std::endl;
   return new SOP_Texture_Obstacle_Src(net, name, op);
 }
 
@@ -100,7 +101,9 @@ SOP_Texture_Obstacle_Src::SOP_Texture_Obstacle_Src(OP_Network *net, const char *
   // If some data IDs don't get bumped properly, the viewport
   // may not update, or SOPs that check data IDs
   // may not cook correctly, so be *very* careful!
+  std::cout<<"flag "<<std::endl;
   mySopFlags.setManagesDataIDs(true);
+  std::cout<<"flag done "<<std::endl;
 }
 
 SOP_Texture_Obstacle_Src::~SOP_Texture_Obstacle_Src()
@@ -131,15 +134,24 @@ SOP_Texture_Obstacle_Src::cookInputGroups(OP_Context &context, int alone)
 void SOP_Texture_Obstacle_Src::loadTexture() {
   UT_String str;
   FILE(str, 0);
-  height_field = IMG_Load(str);
-  
+  //  height_field = IMG_Load(str);
+  //std::cout<<"OPEN FILE "<<str<<std::endl;
 
+   if(height_field == 0) {
+     std::cout << "Erreur : " << SDL_GetError() << std::endl;
+     std::exit(1);
+   }
+    gr = Grid(600, 600);
+    gr.setValues(height_field);
+    SDL_FreeSurface(height_field);
 }
 
 
 OP_ERROR
 SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
 {
+  std::cout<<"cook "<<std::endl;
+
   // Flag the SOP as being time dependent (i.e. cook on time changes)
   flags().timeDep = 0;
   float t = context.getTime();
@@ -166,7 +178,8 @@ SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
     addError(SOP_ATTRIBUTE_INVALID, "amplis_steps input sources");
     return error();
   }
-  
+
+  loadTexture();
   int w = 0;
   GA_Range range_is = is->getPrimitiveRange();
   for(GA_Iterator itis = range_is.begin(); itis != range_is.end(); ++itis, ++w) {
@@ -177,42 +190,68 @@ SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
   }
 
   for (int w = 0; w < nb_wl; ++w) {
-    float wl = wave_lengths[w];
-    float density = DENSITY(t)/wl;
-    float off = OFF(t);
-  //   float width = WIDTH(t) - 2*off;;
-  //   float length = LENGTH(t) - 2*off;;
-  //   int nb_points_w = width*density + 1;
-  //   int nb_points_l = length*density + 1;
- 
-  //   VEC3 center(CX(t), CY(t), CZ(t));
-  //   std::vector<VEC3> corners(4);
-  //   corners[0] = center + VEC3(width/2.0, 0, length/2.0);
-  //   corners[1] = center + VEC3(-width/2.0, 0, length/2.0);
-  //   corners[2] = center + VEC3(-width/2.0, 0, -length/2.0);
-  //   corners[3] = center + VEC3(width/2.0, 0, -length/2.0);
-  //   GA_Offset ptoff = gdp->appendPointBlock(2*nb_points_w + 2*nb_points_l);
-  //   GA_Offset vtxoff;
-  //   GA_Offset prim_off = gdp->appendPrimitivesAndVertices(GA_PRIMPOLY, 1, 2*nb_points_w + 2*nb_points_l, vtxoff, true);
-  //   std::cout<<"nb point l and w "<<nb_points_l<<" "<<nb_points_w<<std::endl;
-  //   int i = 0;
-  //   for (int c = 0; c < 4; ++c) {
-      
-  //     VEC3 dir = corners[(c+1)%4] - corners[c];
-  //     float l = dir.norm();
-  //     int nb_points = l*density + 1;
-  //     std::cout<<"nb point C "<<nb_points<<" "<<c<<std::endl;
-  //     float step = 1.0/(float)nb_points;
-  //     float d = 0;
-  //     for (int j = 0; j < nb_points;  ++i, ++j) {
-  // 	VEC3 pos =  corners[c] + d*dir;
-  // 	std::cout<<"pos "<<pos(0)<<" "<<pos(1)<<" "<<pos(2)<<" "<<i<<std::endl;
-  // 	gdp->getTopology().wireVertexPoint(vtxoff+i,ptoff+i);
-  // 	gdp->setPos3(ptoff+i, UT_Vector3(pos(0), pos(1), pos(2)));
-  // 	d += step; 
+  //   float wl = wave_lengths[w];
+  //   float density = DENSITY(t)/wl;
+  //   float off = OFF(t);
+
+  //   std::list<VEC2> sources;
+  //   uint nb_points = 0;
+  //   uint k_max = 0 + wl*off/gr.getCellSize();
+  // // if (k_max > 25) {
+  // //   k_max = 25;
+  // // }
+
+  //   Grid tmp_prev = gr;
+  //   Grid tmp;
+  //   for (uint k = 0; k < k_max; ++k) {
+  //     std::cout<<"offset pixel "<<k<<" "<<k_max<<std::endl;
+  //     tmp = tmp_prev;
+  //     for (uint i = 1; i < gr.getNbRows()-1; ++i) {
+  // 	for (uint j = 1; j < gr.getNbCols()-1; ++j) {
+  // 	  if (tmp_prev(i, j) != 0 && (tmp_prev(i-1, j) == 0 || tmp_prev(i, j-1) == 0 || tmp_prev(i+1, j) == 0 || tmp(i, j+1) == 0)) {
+  // 	    // tmp(i, j) = 0;
+  // 	  }
+  // 	}
+  //     }
+  //     tmp_prev = tmp;
+  //   }
+  //  float os = 1.0/gr.getCellSize()/density;
+  //   if (wl >= 1) {
+  //     os /= 2;
+  //   }
+  //   int offset = floor(os)+1;
+  //   for (int i = 1; i < gr.getNbRows()-1; ++i) {
+  //     for (int j = 1; j < gr.getNbCols()-1; ++j) {
+  //   	if (tmp(i, j) != 0 && (tmp(i-1, j) == 0 || tmp(i, j-1) == 0 || tmp(i+1, j) == 0 || tmp(i, j+1) == 0)) {
+  //   	bool no_neigh = true;
+  //   	// for (int k = -offset; k <= offset; ++k) {
+  //   	//   for (int h = -offset; h <= offset; ++h) {
+  //   	//       if (tmp(i+k, j+h) == 0.5) {
+  //   	// 	no_neigh = false;
+  //   	// 	break;
+  //   	//       }
+  //   	//   }
+  //   	// }
+	
+  //   	if (no_neigh) {
+  //   	  // VEC2 pos = VEC2((FLOAT)(i-gr.getNbRows()/2)*gr.getCellSize()+CX(t), (FLOAT)(j-gr.getNbCols()/2)*gr.getCellSize()+CY(t));
+  //   	  // sources.push_back(pos);
+  //   	  ++nb_points;
+  //   	  //tmp(i, j) = 0.5;
+  //   	}
   //     }
   //   }
+  //   }
 
+  // //   GA_Offset ptoff = gdp->appendPointBlock(nb_points);
+  // //   GA_Offset vtxoff;
+  // //   GA_Offset prim_off = gdp->appendPrimitivesAndVertices(GA_PRIMPOLY, 1, nb_points, vtxoff, true);
+  // //   std::list<VEC2>::iterator it = sources.begin();
+  // //   for (int i = 0; i < nb_points;  ++i, ++it) {
+  // //     VEC2 pos = *it;
+  // //     gdp->getTopology().wireVertexPoint(vtxoff+i,ptoff+i);
+  // //     gdp->setPos3(ptoff+i, UT_Vector3(pos(0), pos(1), CZ(t)));
+  // //   }
   }
 
   GA_RWHandleF wl_attrib(gdp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "wavelengths", 1));

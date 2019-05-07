@@ -271,7 +271,7 @@ SOP_Create_Source::cookMySop(OP_Context &context)
   }
     
   GA_RWHandleF wl_attrib(gdp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "wavelengths", 1));
-  GA_RWHandleF as_attrib(gdp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "ampli_steps", 1));
+  GA_RWHandleI as_attrib(gdp->findIntTuple(GA_ATTRIB_PRIMITIVE, "ampli_steps", 1));
   if (!wl_attrib.isValid()) {
     // Tuple size one means we group the array into
     // logical groups of 1.  It does *NOT* affect
@@ -284,7 +284,7 @@ SOP_Create_Source::cookMySop(OP_Context &context)
     return error();
   }
   if (!as_attrib.isValid()) {
-    as_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_PRIMITIVE, "ampli_steps", 1));
+    as_attrib = GA_RWHandleI(gdp->addIntTuple(GA_ATTRIB_PRIMITIVE, "ampli_steps", 1));
   }
   if (!as_attrib.isValid()) {
     addError(SOP_MESSAGE, "Failed to create attribute ampli_steps");

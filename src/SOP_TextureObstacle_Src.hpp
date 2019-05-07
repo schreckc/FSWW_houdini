@@ -32,9 +32,9 @@
 
 #include <SOP/SOP_Node.h>
 #include "definitions.hpp"
+#include "Grid.hpp"
 #include <Eigen/SVD>
 #include <SDL2/SDL_image.h>
-
 
 namespace HDK_Sample {
 
@@ -72,6 +72,7 @@ private:
     /// by the method "cookInputGroups".
     const GA_PointGroup *myGroup;
     SDL_Surface *height_field;
+  Grid gr;
 };
 } // End of HDK_Sample namespace
 

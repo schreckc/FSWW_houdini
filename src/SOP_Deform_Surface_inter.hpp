@@ -62,7 +62,7 @@ private:
     const GA_PointGroup *myGroup;
 
   int gdp_count;
-  UT_Array<const GU_Detail*> myGDPLists;
+  UT_Array<GU_Detail*> myGDPLists;
 };
 } // End of HDK_Sample namespace
 

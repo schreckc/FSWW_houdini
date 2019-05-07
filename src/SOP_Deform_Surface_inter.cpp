@@ -81,7 +81,7 @@ SOP_Deform_Surface_inter::SOP_Deform_Surface_inter(OP_Network *net, const char *
   : SOP_Node(net, name, op)
 {
   int size_buffer = 500;
-  myGDPLists = UT_Array<const GU_Detail *>(size_buffer);
+  myGDPLists = UT_Array<GU_Detail *>(size_buffer);
   gdp_count = 0;
 
   // This indicates that this SOP manually manages its data IDs,
@@ -143,11 +143,16 @@ SOP_Deform_Surface_inter::cookMySop(OP_Context &context)
   // if (fr != 0) {
   //   dt = t/fr;
   // }
-
+  if (fr==1) {
+    gdp_count=0;
+    //    std::cout<<"reset gdp count"<<std::endl;
+  }
   float amp = AMP(t);
   int nb_inputs = getInputsArraySize();
   for (int input = 1; input < nb_inputs; ++input) {
-    myGDPLists[gdp_count] = inputGeo(input);
+    //    const GU_Detail *fs = inputGeo(input);
+    //duplicateSource(input, context, myGDPLists[gdp_count],false); 
+    myGDPLists[gdp_count] = new GU_Detail(inputGeo(input));
     ++gdp_count;
   }
 
@@ -185,8 +190,13 @@ SOP_Deform_Surface_inter::cookMySop(OP_Context &context)
    for (int input = 1; input < nb_inputs; ++input) {
      const GU_Detail *fs = inputGeo(input);
      GA_ROHandleF w_handle(fs->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
+     GA_ROHandleI as_handle(fs->findAttribute(GA_ATTRIB_PRIMITIVE, "ampli_steps"));
      if (!w_handle.isValid()) {
        addError(SOP_ATTRIBUTE_INVALID, "wavelengths");
+       return error();
+     }
+     if (!as_handle.isValid()) {
+       addError(SOP_ATTRIBUTE_INVALID, "ampli_steps");
        return error();
      }
      // assert all inputs have same wl
@@ -209,6 +219,7 @@ SOP_Deform_Surface_inter::cookMySop(OP_Context &context)
     for (GA_Iterator lcl_it((fs)->getPrimitiveRange()); lcl_it.blockAdvance(lcl_start, lcl_end); ) {
       for (prim_off = lcl_start; prim_off < lcl_end; ++prim_off) {
 	float wl = w_handle.get(prim_off);
+	int as = as_handle.get(prim_off);
 	float k = M_PI*2.0/wl;
 	float om = omega(k);//sqrtf(9.81*k + 0.074/1000*pow(k, 3));
 	//	std::cout<<"prim wl"<<prim_off<<" "<<wl<<std::endl;
@@ -227,9 +238,14 @@ SOP_Deform_Surface_inter::cookMySop(OP_Context &context)
 	     float ar = 0, ai = 0;
 	     fpreal t_ret = t - r/v;
 	     OP_Context c_ret(t_ret);
-	     int f_ret = t_ret/dt;
+	     int f_ret = floor(t_ret/(dt))-1;
+	     if (t_ret < 0) {
+	       --f_ret;
+	     }
 	     if (f_ret >= 0) {
-	       const GU_Detail *fs_ret = myGDPLists[f_ret*(nb_inputs-1) + (input-1)]; 
+	       
+	       const GU_Detail *fs_ret = myGDPLists[f_ret*(nb_inputs-1) + (input-1)];
+	       //std::cout<<"input "<<input<<" "<<f_ret<<" "<<f_ret*(nb_inputs-1) + (input-1)<<std::endl;
 	       afs = fs_ret->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2);
 	       tuple = afs->getAIFTuple();
 	       tuple->get(afs, *it, ar, 0);
