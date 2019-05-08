@@ -79,6 +79,11 @@ SOP_Solve_FS_inter::SOP_Solve_FS_inter(OP_Network *net, const char *name, OP_Ope
   myGDPLists = UT_Array<const GU_Detail *>(size_buffer);
   myISLists = UT_Array<const GU_Detail *>(size_buffer);
   gdp_count = 0;
+  // for (uint i = 0; i < size_buffer; ++i) {
+  //   myGDPLists[i] = NULL;
+  //   myISLists[i] = NULL;
+  // }
+    
   // This indicates that this SOP manually manages its data IDs,
   // so that Houdini can identify what attributes may have changed,
   // e.g. to reduce work for the viewport, or other SOPs that
@@ -92,8 +97,13 @@ SOP_Solve_FS_inter::SOP_Solve_FS_inter(OP_Network *net, const char *name, OP_Ope
   mySopFlags.setManagesDataIDs(true);
 }
 
-SOP_Solve_FS_inter::~SOP_Solve_FS_inter()
-{
+SOP_Solve_FS_inter::~SOP_Solve_FS_inter() {
+   for (uint i = 0; i < gdp_count; ++i) {
+     delete myGDPLists[i];
+     delete myISLists[i];
+     myGDPLists[i] = NULL;
+     myISLists[i] = NULL;
+   }
 }
 OP_ERROR
 SOP_Solve_FS_inter::cookInputGroups(OP_Context &context, int alone)
@@ -153,12 +163,19 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
   //  int nb_fs = fsi->getNumPoints(); //should be diff for each freq
 
   //
-  myISLists[gdp_count] = new GU_Detail(is);
   // myGDPLists[gdp_count] = new GU_Detail(gdp);
   // ++gdp_count;  //moved at the end of the function
+  //  std::cout<<"frame "<<fr<<" "<<gdp_count<<std::endl;
 
   
   if (fr == 1) {
+     for (uint i = 0; i < gdp_count; ++i) {
+       delete myGDPLists[i];
+       delete myISLists[i];
+       myGDPLists[i] = NULL;
+       myISLists[i] = NULL;
+     }
+     gdp_count = 0;
     wave_lengths = std::vector<float>(nb_wl);
     ampli_steps = std::vector<int>(nb_wl);
     p_in = std::vector<VectorXcf>(nb_wl);
@@ -169,7 +186,7 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
       addError(SOP_ATTRIBUTE_INVALID, "wavelengths input sources");
       return error();
     }
-    
+        
     int w = 0;
     GA_Range range_is = is->getPrimitiveRange();
     for(GA_Iterator itis = range_is.begin(); itis != range_is.end(); ++itis, ++w) {
@@ -219,6 +236,8 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
   }
   }
 
+  myISLists[gdp_count] = new GU_Detail(is);
+  
   const GA_Attribute *afs;
   const GA_AIFTuple *tuple; 
     // fill the p_in for each frequencies
@@ -257,7 +276,7 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
       	   tuple->get(afs, *it, ai, 1);
       	 }
       	  std::complex<float> ampli(ar, ai);
-	  p_in[w](i) -= ampli*fund_solution(k*r);
+      	  p_in[w](i) -= ampli*fund_solution(k*r)*damping(0.0001, r, k);
       }
       // //      add contribution from other sources of the obstacle
       const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
@@ -282,7 +301,7 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
 	      //      std::cout<<"f_ret "<<f_ret<<"  "<<*it<<" "<<*itbp<<" "<<t<<" "<<ret<<" ("<<ar<<","<<ai<<")"<<std::endl;
       	    }
       	  COMPLEX a(ar, ai);
-	    p_in[w](i) -= 0.8f*a*fund_solution(k*r);
+	    p_in[w](i) -= 0.8f*a*fund_solution(k*r)*damping(0.0001, r, k);
       	} else {
       	  if (f_ret >= 1) {
       	    const GU_Detail *fs_ret_prev = myGDPLists[f_ret-1]; 
@@ -314,7 +333,7 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
     GA_Range range = prim->getPointRange();
     int nb_es = range.getEntries();
     VectorXcf c(nb_es);
-    //     std::cout<<"pin\n"<<p_in[w]<<std::endl;
+    //    std::cout<<"pin\n"<<p_in[w]<<std::endl;
     c = svd[w].solve(p_in[w]);
     //    std::cout<<"c\n"<<c<<std::endl;
     int i = 0;

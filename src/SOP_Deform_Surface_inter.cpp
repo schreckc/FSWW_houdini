@@ -97,8 +97,11 @@ SOP_Deform_Surface_inter::SOP_Deform_Surface_inter(OP_Network *net, const char *
   mySopFlags.setManagesDataIDs(true);
 }
 
-SOP_Deform_Surface_inter::~SOP_Deform_Surface_inter()
-{
+SOP_Deform_Surface_inter::~SOP_Deform_Surface_inter() {
+   for (uint i = 0; i < gdp_count; ++i) {
+     delete myGDPLists[i];
+     myGDPLists[i] = NULL;
+   }
 }
 OP_ERROR
 SOP_Deform_Surface_inter::cookInputGroups(OP_Context &context, int alone)
@@ -144,6 +147,10 @@ SOP_Deform_Surface_inter::cookMySop(OP_Context &context)
   //   dt = t/fr;
   // }
   if (fr==1) {
+    // for (uint i = 0; i < gdp_count; ++i) {
+    //   delete myGDPLists[i];
+    //   myGDPLists[i] = NULL;
+    // }
     gdp_count=0;
     //    std::cout<<"reset gdp count"<<std::endl;
   }
