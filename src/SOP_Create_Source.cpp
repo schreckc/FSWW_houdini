@@ -66,6 +66,8 @@ static PRM_Name names[] = {
   PRM_Name("wl_max",  "Maximum Wavelength"),
   PRM_Name("wl_step",  "Wavelength Multiplicative Step"),
   PRM_Name("type",   "Type (point or line)"),
+  PRM_Name("buffer_size",   "Size of the buffer containing past amplitudes"),
+  PRM_Name("damping",   "Damping"),
 };
 
 PRM_Template
@@ -82,6 +84,8 @@ SOP_Create_Source::myTemplateList[] = {
   PRM_Template(PRM_FLT_J,     1, &names[4], PRMoneDefaults),
   PRM_Template(PRM_FLT_J,     1, &names[5], PRMoneDefaults),
   PRM_Template(PRM_INT_J,     1, &names[6], PRMzeroDefaults),
+  PRM_Template(PRM_INT_J,     1, &names[7], new PRM_Default(500)),
+  PRM_Template(PRM_FLT_J,     1, &names[8], PRMzeroDefaults),
   PRM_Template(),
 };
 
@@ -143,16 +147,17 @@ SOP_Create_Source::cookMySop(OP_Context &context)
 
   float t = context.getTime();
   int fr = context.getFrame();
-  float dt_ = 0.025;
+  float dt_ = 0.1;
   // if (fr != 0) {
   //   dt_ = t/fr;
   // }
   float phase = PHASE(t);
   float amp = AMP(t);
-
+  uint buffer_size = BUFFER_SIZE(0);
+  
   std::vector<float> wave_lengths;
 
-  FLOAT wl = WL_MIN(t);
+  FLOAT wl = WL_MIN(0);
   int nb_wl = 1;
   wave_lengths.push_back(wl);
 
@@ -234,7 +239,6 @@ SOP_Create_Source::cookMySop(OP_Context &context)
   // as_attrib->bumpDataId();
 
   
-  
   GA_Offset start_ptoff;
   start_ptoff = gdp->appendPointBlock(nb_wl);
   UT_Vector3 Pvalue(X(t), Y(t), Z(t));
@@ -251,13 +255,13 @@ SOP_Create_Source::cookMySop(OP_Context &context)
       gdp->getTopology().wireVertexPoint(vtxoff, start_ptoff+w);
     }
   }
-  GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2));
+  GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   if (!ampli_attrib.isValid()) {
     // Tuple size one means we group the array into
     // logical groups of 1.  It does *NOT* affect
     // the length of the arrays, which are always
     // measured in ints.
-    ampli_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli", 2));
+    ampli_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   }
   if (!ampli_attrib.isValid()) {
     addError(SOP_MESSAGE, "Failed to create attribute ampli");
@@ -265,8 +269,14 @@ SOP_Create_Source::cookMySop(OP_Context &context)
   }
   {
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
-      ampli_attrib.set(ptoff, 0, amp);
-      ampli_attrib.set(ptoff, 1, 0);
+      for (uint i = 0; i < 100; i+=2) {
+      ampli_attrib.set(ptoff, i, amp);
+      ampli_attrib.set(ptoff, i+1, 0);
+      }
+      for (uint i = 100; i < 500; i+=2) {
+	ampli_attrib.set(ptoff, i, 0);
+	ampli_attrib.set(ptoff, i+1, 0);
+      }	 
     }
   }
     
@@ -290,7 +300,28 @@ SOP_Create_Source::cookMySop(OP_Context &context)
     addError(SOP_MESSAGE, "Failed to create attribute ampli_steps");
     return error();
   }
-    
+
+    GA_RWHandleI bs_attrib(gdp->findIntTuple(GA_ATTRIB_DETAIL, "buffer_size", 1));
+    GA_RWHandleI damping_attrib(gdp->findIntTuple(GA_ATTRIB_DETAIL, "damping", 1));
+    if (!bs_attrib.isValid()) {
+    bs_attrib = GA_RWHandleI(gdp->addIntTuple(GA_ATTRIB_DETAIL, "buffer_size", 1));
+  }
+  if (!bs_attrib.isValid()) {
+    addError(SOP_MESSAGE, "Failed to create attribute buffer_size");
+    return error();
+  }
+  bs_attrib.set(0,buffer_size);
+   if (!damping_attrib.isValid()) {
+    damping_attrib = GA_RWHandleI(gdp->addIntTuple(GA_ATTRIB_DETAIL, "damping", 1));
+  }
+  if (!damping_attrib.isValid()) {
+    addError(SOP_MESSAGE, "Failed to create attribute damping");
+    return error();
+  }
+  bs_attrib.set(0,buffer_size);
+  damping_attrib.set(0,DAMPING(t));
+
+  
   GA_Offset prim_off;
   GA_Offset lcl_start, lcl_end;
   int w = 0;
@@ -303,6 +334,8 @@ SOP_Create_Source::cookMySop(OP_Context &context)
   }
   wl_attrib->bumpDataId();
   as_attrib->bumpDataId();
+  bs_attrib->bumpDataId();
+  damping_attrib->bumpDataId();
      
   // // Phandle.bumpDataId();
   return error();

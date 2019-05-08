@@ -80,9 +80,9 @@ SOP_Deform_Surface_inter::myConstructor(OP_Network *net, const char *name, OP_Op
 SOP_Deform_Surface_inter::SOP_Deform_Surface_inter(OP_Network *net, const char *name, OP_Operator *op)
   : SOP_Node(net, name, op)
 {
-  int size_buffer = 500;
-  myGDPLists = UT_Array<GU_Detail *>(size_buffer);
-  gdp_count = 0;
+  // int size_buffer = 500;
+  // myGDPLists = UT_Array<GU_Detail *>(size_buffer);
+  // gdp_count = 0;
 
   // This indicates that this SOP manually manages its data IDs,
   // so that Houdini can identify what attributes may have changed,
@@ -98,10 +98,10 @@ SOP_Deform_Surface_inter::SOP_Deform_Surface_inter(OP_Network *net, const char *
 }
 
 SOP_Deform_Surface_inter::~SOP_Deform_Surface_inter() {
-   for (uint i = 0; i < gdp_count; ++i) {
-     delete myGDPLists[i];
-     myGDPLists[i] = NULL;
-   }
+   // for (uint i = 0; i < gdp_count; ++i) {
+   //   delete myGDPLists[i];
+   //   myGDPLists[i] = NULL;
+   // }
 }
 OP_ERROR
 SOP_Deform_Surface_inter::cookInputGroups(OP_Context &context, int alone)
@@ -141,7 +141,7 @@ SOP_Deform_Surface_inter::cookMySop(OP_Context &context)
   // frame *= 0.03;
   float t = context.getTime();
   int fr = context.getFrame();
-  float dt = 0.25;
+  float dt = 0.1;
   t = dt*fr;
   // if (fr != 0) {
   //   dt = t/fr;
@@ -151,17 +151,17 @@ SOP_Deform_Surface_inter::cookMySop(OP_Context &context)
     //   delete myGDPLists[i];
     //   myGDPLists[i] = NULL;
     // }
-    gdp_count=0;
+    //gdp_count=0;
     //    std::cout<<"reset gdp count"<<std::endl;
   }
   float amp = AMP(t);
   int nb_inputs = getInputsArraySize();
-  for (int input = 1; input < nb_inputs; ++input) {
-    //    const GU_Detail *fs = inputGeo(input);
-    //duplicateSource(input, context, myGDPLists[gdp_count],false); 
-    myGDPLists[gdp_count] = new GU_Detail(inputGeo(input));
-    ++gdp_count;
-  }
+  // for (int input = 1; input < nb_inputs; ++input) {
+  //   //    const GU_Detail *fs = inputGeo(input);
+  //   //duplicateSource(input, context, myGDPLists[gdp_count],false); 
+  //   myGDPLists[gdp_count] = new GU_Detail(inputGeo(input));
+  //   ++gdp_count;
+  // }
 
   
   // Duplicate input geometry
@@ -206,9 +206,22 @@ SOP_Deform_Surface_inter::cookMySop(OP_Context &context)
        addError(SOP_ATTRIBUTE_INVALID, "ampli_steps");
        return error();
      }
+     GA_ROHandleI bs_handle(fs->findAttribute(GA_ATTRIB_DETAIL, "buffer_size"));
+     GA_ROHandleF damping_handle(fs->findAttribute(GA_ATTRIB_DETAIL, "damping"));
+     if (!bs_handle.isValid()) {
+       addError(SOP_ATTRIBUTE_INVALID, "buffer sizes input sources");
+       return error();
+     }
+     if (!damping_handle.isValid()) {
+       addError(SOP_ATTRIBUTE_INVALID, "damping input sources");
+    return error();
+     }
+    int buffer_size = bs_handle.get(0);
+    float damping_coef = damping_handle.get(0);
+     
      // assert all inputs have same wl
      
-     const GA_Attribute *afs = fs->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2);
+    const GA_Attribute *afs = fs->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size);
      if (!afs)	{
        addError(SOP_ATTRIBUTE_INVALID, "ampli");
        return error();
@@ -227,6 +240,7 @@ SOP_Deform_Surface_inter::cookMySop(OP_Context &context)
       for (prim_off = lcl_start; prim_off < lcl_end; ++prim_off) {
 	float wl = w_handle.get(prim_off);
 	int as = as_handle.get(prim_off);
+	//int bs = bs_handle.get(prim_off);
 	float k = M_PI*2.0/wl;
 	float om = omega(k);//sqrtf(9.81*k + 0.074/1000*pow(k, 3));
 	//	std::cout<<"prim wl"<<prim_off<<" "<<wl<<std::endl;
@@ -245,21 +259,22 @@ SOP_Deform_Surface_inter::cookMySop(OP_Context &context)
 	     float ar = 0, ai = 0;
 	     fpreal t_ret = t - r/v;
 	     OP_Context c_ret(t_ret);
-	     int f_ret = floor(t_ret/(dt))-1;
+	     int f_ret = floor(t_ret/(dt)) - 1;
+	     f_ret = floor((float)f_ret/(float)as); 
 	     if (t_ret < 0) {
 	       --f_ret;
 	     }
 	     if (f_ret >= 0) {
 	       
-	       const GU_Detail *fs_ret = myGDPLists[f_ret*(nb_inputs-1) + (input-1)];
+	       //	       const GU_Detail *fs_ret = myGDPLists[f_ret*(nb_inputs-1) + (input-1)];
 	       //std::cout<<"input "<<input<<" "<<f_ret<<" "<<f_ret*(nb_inputs-1) + (input-1)<<std::endl;
-	       afs = fs_ret->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2);
+	       afs = fs->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size);
 	       tuple = afs->getAIFTuple();
-	       tuple->get(afs, *it, ar, 0);
-	       tuple->get(afs, *it, ai, 1);
+	       tuple->get(afs, *it, ar, 2*f_ret);
+	       tuple->get(afs, *it, ai, 2*f_ret+1);
 	     }
 	     std::complex<float> ampli(ar, ai);
-	     a += ampli*fund_solution(k*r);
+	     a += ampli*fund_solution(k*r)*damping(damping_coef, r, k);
 	   }
 	   //UT_Vector3 nampli(real(a), imag(a), 0);
 	   // float tmpr = amplir_attrib.get(ptoff, w);

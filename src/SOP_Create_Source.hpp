@@ -61,6 +61,8 @@ private:
   fpreal      WL_MAX(fpreal t)             { return evalFloat("wl_max", 0, t); }
   fpreal      WL_STEP(fpreal t)             { return evalFloat("wl_step", 0, t); }
   int         TYPE(fpreal t) {return evalInt("type", 0, t);}
+  int         BUFFER_SIZE(fpreal t) {return evalInt("buffer_size", 0, t);}
+  fpreal      DAMPING(fpreal t) { return evalFloat("damping", 0, t); }
   fpreal      X(fpreal t) { return evalFloat("pos", 0, t); }
   fpreal      Y(fpreal t) { return evalFloat("pos", 1, t); }
   fpreal      Z(fpreal t) { return evalFloat("pos", 2, t); }

@@ -63,6 +63,7 @@ static PRM_Name names[] = {
   PRM_Name("off",     "Offset distance"),
   PRM_Name("density",   "Density"),
   PRM_Name("radius",   "Radius"),
+  PRM_Name("inter_src",   "Interactive sources"),
 };
 
 PRM_Default* off_default = new PRM_Default(0.3);
@@ -77,6 +78,7 @@ SOP_Circle_Obstacle_Src::myTemplateList[] = {
   PRM_Template(PRM_FLT_J,     1, &names[1], off_default),
   PRM_Template(PRM_FLT_J,     1, &names[2], dens_default),
   PRM_Template(PRM_FLT_J,     1, &names[3], PRMoneDefaults),
+  PRM_Template(PRM_TOGGLE_J,    1, &names[4]),
   PRM_Template(),
 };
 
@@ -135,22 +137,22 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
   // Flag the SOP as being time dependent (i.e. cook on time changes)
   flags().timeDep = 0;
   float t = context.getTime();
-
+  bool is_inter = INTER_SRC(t);
    OP_AutoLockInputs inputs(this);
     if (inputs.lock(context) >= UT_ERROR_ABORT)
         return error();
   
   gdp->clearAndDestroy();
 
-  const GU_Detail *is = inputGeo(0); //input sources (used to get wavelength)
+    const GU_Detail *is = inputGeo(0); //input sources (used to get wavelength)
   int nb_wl = is->getPrimitiveRange().getEntries();
-
+    
   std::vector<float> wave_lengths(nb_wl);
   std::vector<int> ampli_steps(nb_wl);
 
   GA_ROHandleF w_handle(is->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
   GA_ROHandleF as_handle(is->findAttribute(GA_ATTRIB_PRIMITIVE, "ampli_steps"));
-  if (!w_handle.isValid()) {
+   if (!w_handle.isValid()) {
     addError(SOP_ATTRIBUTE_INVALID, "wavelengths input sources");
     return error();
   }
@@ -158,7 +160,25 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
     addError(SOP_ATTRIBUTE_INVALID, "amplis_steps input sources");
     return error();
   }
+
+  GA_ROHandleI bs_handle(is->findAttribute(GA_ATTRIB_DETAIL, "buffer_size"));
+  GA_ROHandleF damping_handle(is->findAttribute(GA_ATTRIB_DETAIL, "damping"));
+  if (!bs_handle.isValid()) {
+    addError(SOP_ATTRIBUTE_INVALID, "buffer sizes input sources");
+    return error();
+  }
+  if (!damping_handle.isValid()) {
+    addError(SOP_ATTRIBUTE_INVALID, "damping input sources");
+    return error();
+  }
   
+   int buffer_size = 2;
+    //std::cout<<"buffer siez init "<< buffer_sizes[w]<<" "<<w<<std::endl;
+   if (is_inter) {
+     buffer_size= bs_handle.get(0);
+   }
+   float damping = damping_handle.get(0);
+   
   int w = 0;
   GA_Range range_is = is->getPrimitiveRange();
   for(GA_Iterator itis = range_is.begin(); itis != range_is.end(); ++itis, ++w) {
@@ -166,6 +186,11 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
     float wl = w_handle.get(prim_off);
     wave_lengths[w] = wl;
     ampli_steps[w]= as_handle.get(prim_off);
+    // buffer_sizes[w]= 2;
+    // //std::cout<<"buffer siez init "<< buffer_sizes[w]<<" "<<w<<std::endl;
+    // if (is_inter) {
+    //   buffer_sizes[w]= bs_handle.get(prim_off);
+    // }
   }
 
   for (int w = 0; w < nb_wl; ++w) {
@@ -200,6 +225,8 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
 
   GA_RWHandleF wl_attrib(gdp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "wavelengths", 1));
   GA_RWHandleF as_attrib(gdp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "ampli_steps", 1));
+  GA_RWHandleF bs_attrib(gdp->findFloatTuple(GA_ATTRIB_DETAIL, "buffer_size", 1));
+  GA_RWHandleF damping_attrib(gdp->findFloatTuple(GA_ATTRIB_DETAIL, "damping", 1));
   if (!wl_attrib.isValid()) {
     wl_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_PRIMITIVE, "wavelengths", 1));
   }
@@ -214,19 +241,53 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
     addError(SOP_MESSAGE, "Failed to create attribute ampli_steps");
     return error();
   }
+  if (!bs_attrib.isValid()) {
+    bs_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_DETAIL, "buffer_size", 1));
+  }
+  if (!bs_attrib.isValid()) {
+    addError(SOP_MESSAGE, "Failed to create attribute buffer_size");
+    return error();
+  }
+  if (!damping_attrib.isValid()) {
+    damping_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_DETAIL, "damping", 1));
+  }
+  if (!damping_attrib.isValid()) {
+    addError(SOP_MESSAGE, "Failed to create attribute damping");
+    return error();
+  }
 
+ bs_attrib.set(0, buffer_size);
+ damping_attrib.set(0, damping);
+  
   w = 0;
-  GA_Offset prim_off, lcl_start, lcl_end;
+   GA_Offset prim_off, lcl_start, lcl_end;
   for (GA_Iterator lcl_it((gdp)->getPrimitiveRange()); lcl_it.blockAdvance(lcl_start, lcl_end); ) {
     for (prim_off = lcl_start; prim_off < lcl_end; ++prim_off) {
       wl_attrib.set(prim_off, wave_lengths[w]);
       as_attrib.set(prim_off, ampli_steps[w]);
+      //   bs_attrib.set(prim_off, buffer_sizes[w]);
+      // GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_sizes[0]));
+      // if (!ampli_attrib.isValid()) {
+      // 	ampli_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_sizes[0]));
+      // }
+      // if (!ampli_attrib.isValid()) {
+      // 	addError(SOP_MESSAGE, "Failed to create attribute ampli");
+      // 	return error();
+      // }
+      // const GA_Primitive* prim = gdp->getPrimitive(prim_off);
+      // GA_Range range = prim->getPointRange();
+      // for(GA_Iterator it = range.begin(); it != range.end(); ++it) {
+      // 	for (uint i = 0; i < buffer_sizes[0]; ++i) {
+      // 	  ampli_attrib.set((*it), i, 0);
+      // 	}
+      // }
       ++w;
     }
   }
-  GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2));
+  // std::cout<<"buffer size "<<buffer_sizes[w]<<" "<<w<<std::endl;
+  GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   if (!ampli_attrib.isValid()) {
-    ampli_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli", 2));
+    ampli_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   }
   if (!ampli_attrib.isValid()) {
     addError(SOP_MESSAGE, "Failed to create attribute ampli");
@@ -235,8 +296,10 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
   {
     GA_Offset ptoff; 
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
-      ampli_attrib.set(ptoff, 0, 0);
-      ampli_attrib.set(ptoff, 1, 0);
+      for (uint i = 0; i < buffer_size; ++i) {
+      ampli_attrib.set(ptoff, i, 0);
+      }
+      //      ampli_attrib.set(ptoff, 1, 0);
     }
   }
   gdp->bumpDataIdsForAddOrRemove(true, true, true);

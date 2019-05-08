@@ -69,7 +69,8 @@ private:
   std::vector<int> ampli_steps;
   std::vector<VectorXcf> p_in;
   std::vector<Eigen::BDCSVD<MatrixXcf> > svd;
-  
+  int buffer_size;
+  float damping_coef;
 };
 } // End of HDK_Sample namespace
 
