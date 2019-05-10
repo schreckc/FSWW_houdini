@@ -65,13 +65,14 @@ private:
   fpreal      CX(fpreal t) { return evalFloat("center", 0, t); }
   fpreal      CY(fpreal t) { return evalFloat("center", 1, t); }
   fpreal      CZ(fpreal t) { return evalFloat("center", 2, t); }
-
+  int        INTER_SRC(fpreal t) {return evalInt("inter_src", 0, t);}
+  
   void loadTexture();
   
   /// This is the group of geometry to be manipulated by this SOP and cooked
     /// by the method "cookInputGroups".
-    const GA_PointGroup *myGroup;
-    SDL_Surface *height_field;
+  const GA_PointGroup *myGroup;
+  //SDL_Surface *height_field;
   Grid gr;
 };
 } // End of HDK_Sample namespace
