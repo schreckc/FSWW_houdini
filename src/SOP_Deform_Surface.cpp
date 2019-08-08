@@ -1,26 +1,25 @@
 /*
- * Copyright (c) 2019
- *	Side Effects Software Inc.  All rights reserved.
- *
- * Redistribution and use of Houdini Development Kit samples in source and
- * binary forms, with or without modification, are permitted provided that the
- * following conditions are met:
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- * 2. The name of Side Effects Software may not be used to endorse or
- *    promote products derived from this software without specific prior
- *    written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY SIDE EFFECTS SOFTWARE `AS IS' AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
- * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN
- * NO EVENT SHALL SIDE EFFECTS SOFTWARE BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
- * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * MIT License
+ * 
+ * Copyright (c) 2019 Camille Schreck
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  *
  *----------------------------------------------------------------------------
  * Deform_Surface SOP
@@ -46,10 +45,8 @@
 
 #include "definitions.hpp"
 
-void newSopOperator(OP_OperatorTable *table)
-{
-  table->addOperator(new OP_Operator(
-				     "def_surf_fs",
+void newSopOperator(OP_OperatorTable *table) {
+  table->addOperator(new OP_Operator("def_surf_fs",
 				     "Deform Surface FS",
 				     SOP_Deform_Surface::myConstructor,
 				     SOP_Deform_Surface::myTemplateList,
@@ -61,72 +58,43 @@ static PRM_Name names[] = {
   PRM_Name("amp",     "Amplitude"),
 };
 
-PRM_Template
-SOP_Deform_Surface::myTemplateList[] = {
+PRM_Template SOP_Deform_Surface::myTemplateList[] = {
   PRM_Template(PRM_STRING,    1, &PRMgroupName, 0, &SOP_Node::pointGroupMenu,
-	       0, 0, SOP_Node::getGroupSelectButton(
-						    GA_GROUP_POINT)),
+	       0, 0, SOP_Node::getGroupSelectButton(GA_GROUP_POINT)),
   PRM_Template(PRM_FLT_J,     1, &names[0], PRMoneDefaults, 0,
 	       &PRMscaleRange),
   PRM_Template(),
 };
 
 
-OP_Node *
-SOP_Deform_Surface::myConstructor(OP_Network *net, const char *name, OP_Operator *op)
+OP_Node *SOP_Deform_Surface::myConstructor(OP_Network *net, const char *name, OP_Operator *op)
 {
   return new SOP_Deform_Surface(net, name, op);
 }
 
 SOP_Deform_Surface::SOP_Deform_Surface(OP_Network *net, const char *name, OP_Operator *op)
-  : SOP_Node(net, name, op)
-{
-  int size_buffer = 250;
-  myGDPLists = UT_Array<const GU_Detail *>(size_buffer);
-  gdp_count = 0;
-
-  // This indicates that this SOP manually manages its data IDs,
-  // so that Houdini can identify what attributes may have changed,
-  // e.g. to reduce work for the viewport, or other SOPs that
-  // check whether data IDs have changed.
-  // By default, (i.e. if this line weren't here), all data IDs
-  // would be bumped after the SOP cook, to indicate that
-  // everything might have changed.
-  // If some data IDs don't get bumped properly, the viewport
-  // may not update, or SOPs that check data IDs
-  // may not cook correctly, so be *very* careful!
+  : SOP_Node(net, name, op) {
   mySopFlags.setManagesDataIDs(true);
 }
 
 SOP_Deform_Surface::~SOP_Deform_Surface()
 {
 }
-OP_ERROR
-SOP_Deform_Surface::cookInputGroups(OP_Context &context, int alone)
-{
-  // The SOP_Node::cookInputPointGroups() provides a good default
-  // implementation for just handling a point selection.
-  return cookInputPointGroups(
-			      context, // This is needed for cooking the group parameter, and cooking the input if alone.
-			      myGroup, // The group (or NULL) is written to myGroup if not alone.
-			      alone,   // This is true iff called outside of cookMySop to update handles.
-			      // true means the group will be for the input geometry.
-			      // false means the group will be for gdp (the working/output geometry).
-			      true,    // (default) true means to set the selection to the group if not alone and the highlight flag is on.
-			      0,       // (default) Parameter index of the group field
-			      -1,      // (default) Parameter index of the group type field (-1 since there isn't one)
-			      true,    // (default) true means that a pointer to an existing group is okay; false means group is always new.
-			      false,   // (default) false means new groups should be unordered; true means new groups should be ordered.
-			      true,    // (default) true means that all new groups should be detached, so not owned by the detail;
-			      //           false means that new point and primitive groups on gdp will be owned by gdp.
-			      0        // (default) Index of the input whose geometry the group will be made for if alone.
-			      );
+OP_ERROR SOP_Deform_Surface::cookInputGroups(OP_Context &context, int alone) {
+  return cookInputPointGroups(context,
+			      myGroup,
+			      alone,
+			      true,
+			      0,
+			      -1,
+			      true,
+			      false,
+			      true,
+			      0);
 }
 
 
-OP_ERROR
-SOP_Deform_Surface::cookMySop(OP_Context &context)
-{
+OP_ERROR SOP_Deform_Surface::cookMySop(OP_Context &context) {
   OP_AutoLockInputs inputs(this);
   if (inputs.lock(context) >= UT_ERROR_ABORT)
     return error();
