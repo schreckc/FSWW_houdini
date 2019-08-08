@@ -13,18 +13,18 @@ The code depends on Houdini. We have only tested the code using Houdini FX 17.0.
 Ubuntu 18.04.
 
 To use the code, you first have to compile the plug-in. A Makefile is provided
-in the 'source' sub-directory. Before you can compile the code, you need to
+in the root directory. Before you can compile the code, you need to
 load in the HDK environment variables.
 
     $ pushd /opt/hfs17.0.459
     $ source houdini_setup
     $ popd
 
-Then you can compile the code and install the plug-in.
+Then you can compile the code.
 
     $ make
 
-Once the plug-in is installed in your home directory (there should be a file in
+Once the plug-in is installed in your home directory (there should be files like "SOP_Create_Source.so" in
 ~/houdini17.0/dso/) you can load up the included Houdini scene
 file.
 
@@ -36,7 +36,7 @@ or
 Camille Schreck <camille.schreck@ist.ac.at
 Last updated 2019-08-07
 
-
+--------------------------------------------------------------------------------
 Implementation
 --------------------------------------------------------------------------------
 If you want to understand or modify the code, first thing to do is to read the article.
