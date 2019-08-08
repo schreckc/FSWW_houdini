@@ -23,7 +23,19 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
- * Square Obstalce SOP
+ * Square Obstacle SOP
+ *---------------------------------------------------------------------------
+ * Create set of point sources along an offset surface of the obstacle.
+ * Range of wavelength (and time step per wl), and is copied from input geometry, as well as
+ *    the detail attibute.
+ * Create on primitve and subset of sources for each wl.
+ * Spacing depends on the wavelength and the parameter "density".
+ * I use this node also to create a set of point sampling the border of the obstacle (offset=0)
+ *    for the boundary conditions.
+ * Note: the density of the boundary points should be at least twice the density of the
+ *    sources.
+ * Note 2: for the aperiodic version, do not forget to check the "interactive sources" box in
+ *   the parameter of the node creating the sources of the obstacle.
  */
 
 
@@ -34,27 +46,23 @@
 #include "definitions.hpp"
 #include <Eigen/SVD>
 
-namespace HDK_Sample {
-
-/// Pure C++ implementation of @ref SOP_HOMWave
-/// @see SOP_HOMWave, vex_wave(), @ref HOM/SOP_HOMWave.py
 class SOP_Square_Obstacle_Src : public SOP_Node
 {
 public:
-    SOP_Square_Obstacle_Src(OP_Network *net, const char *name, OP_Operator *op);
-    virtual ~SOP_Square_Obstacle_Src();
+  SOP_Square_Obstacle_Src(OP_Network *net, const char *name, OP_Operator *op);
+  virtual ~SOP_Square_Obstacle_Src();
 
-    static PRM_Template myTemplateList[];
-    static OP_Node *myConstructor(OP_Network*, const char *, OP_Operator *);
+  static PRM_Template myTemplateList[];
+  static OP_Node *myConstructor(OP_Network*, const char *, OP_Operator *);
 
   /// This method is created so that it can be called by handles.  It only
-    /// cooks the input group of this SOP.  The geometry in this group is
-    /// the only geometry manipulated by this SOP.
-    virtual OP_ERROR             cookInputGroups(OP_Context &context, 
-                                                int alone = 0);
+  /// cooks the input group of this SOP.  The geometry in this group is
+  /// the only geometry manipulated by this SOP.
+  virtual OP_ERROR             cookInputGroups(OP_Context &context, 
+					       int alone = 0);
 
 protected:
-    virtual OP_ERROR cookMySop(OP_Context &context);
+  virtual OP_ERROR cookMySop(OP_Context &context);
 private:
   void        getGroups(UT_String &str){ evalString(str, "group", 0, 0); }
   fpreal      OFF(fpreal t)            { return evalFloat("off", 0, t); }
@@ -65,10 +73,9 @@ private:
   fpreal      CY(fpreal t) { return evalFloat("center", 1, t); }
   fpreal      CZ(fpreal t) { return evalFloat("center", 2, t); }
   /// This is the group of geometry to be manipulated by this SOP and cooked
-    /// by the method "cookInputGroups".
-    const GA_PointGroup *myGroup;
+  /// by the method "cookInputGroups".
+  const GA_PointGroup *myGroup;
   
 };
-} // End of HDK_Sample namespace
 
 #endif

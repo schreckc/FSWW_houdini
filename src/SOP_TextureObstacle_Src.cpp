@@ -23,10 +23,23 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
+ * Texture Obstacle SOP
+ *----------------------------------------------------------------------------
+ * Create set of point sources along an offset surface of the obstacle.
+ * Range of wavelength (and time step per wl), and is copied from input geometry, as well as
+ *    the detail attibute.
+ * Create on primitve and subset of sources for each wl.
+ * Spacing depends on the wavelength and the parameter "density".
+ * I use this node also to create a set of point sampling the border of the obstacle (offset=0)
+ *    for the boundary conditions.
+ * Note: the density of the boundary points should be at least twice the density of the
+ *    sources.
+ * Note 2: for the aperiodic version, do not forget to check the "interactive sources" box in
+ *   the parameter of the node creating the sources of the obstacle.
+ * Note 3: the density is also limited by the resolution of the
+ *   texture (cannot have more than one source per pixel).
  */
 
-/// This is the pure C++ implementation of the wave SOP.
-/// @see @ref HOM/SOP_HOMWave.py, @ref HOM/SOP_HOMWaveNumpy.py, @ref HOM/SOP_HOMWaveInlinecpp.py, @ref HOM/SOP_HOMWave.C, @ref SOP/SOP_VEXWave.vfl
 
 #include "SOP_TextureObstacle_Src.hpp"
 
@@ -48,10 +61,8 @@
 #include <vector>
 #include <string>
 
-using namespace HDK_Sample;
 
-void
-newSopOperator(OP_OperatorTable *table)
+void newSopOperator(OP_OperatorTable *table)
 {
   table->addOperator(new OP_Operator(
 				     "texture_obstacle_src_fs",
@@ -67,8 +78,8 @@ static PRM_Name names[] = {
   PRM_Name("center",  "Center"),
   PRM_Name("off",     "Offset distance"),
   PRM_Name("density",   "Density"),
-   PRM_Name("file",   "Texture File"),
-   PRM_Name("inter_src",   "Interactive sources"),
+  PRM_Name("file",   "Texture File"),
+  PRM_Name("inter_src",   "Interactive sources"),
 };
 
 PRM_Default* off_default = new PRM_Default(0.3);
@@ -81,8 +92,8 @@ SOP_Texture_Obstacle_Src::myTemplateList[] = {
   PRM_Template(PRM_XYZ_J,     3, &names[0], PRMzeroDefaults),
   PRM_Template(PRM_FLT_J,     1, &names[1], off_default),
   PRM_Template(PRM_FLT_J,     1, &names[2], dens_default),
-   PRM_Template(PRM_PICFILE,   1, &names[3], PRMzeroDefaults),
-    PRM_Template(PRM_TOGGLE_J,    1, &names[4]),
+  PRM_Template(PRM_PICFILE,   1, &names[3], PRMzeroDefaults),
+  PRM_Template(PRM_TOGGLE_J,    1, &names[4]),
   PRM_Template(),
 };
 
@@ -139,7 +150,7 @@ void SOP_Texture_Obstacle_Src::loadTexture() {
   int n_rows = 600;
   int n_cols = 600;  
   gr = Grid(n_rows, n_cols, 0.05);
-   UT_String str;
+  UT_String str;
   FILE(str, 0);
   UT_PtrArray<PXL_Raster *> images;
   IMG_File *file = IMG_File::open(str);
@@ -147,79 +158,46 @@ void SOP_Texture_Obstacle_Src::loadTexture() {
     bool success = file->readImages(images);
     file->close();
     delete file;
-     if(success) {
-       //       std::cout<<images.size()<<std::endl;
-       uint w = images[0]->getXres();
-       uint h = images[0]->getYres();
-       FLOAT pix_per_cell_x = 3*(FLOAT)h/(FLOAT)n_rows;
-       FLOAT pix_per_cell_y = 3*(FLOAT)w/(FLOAT)n_cols;
-// //       FLOAT byte_per_cell_x = texture->format->BytesPerPixel * pix_per_cell_x;
-// //       FLOAT byte_per_cell_y = texture->format->BytesPerPixel * pix_per_cell_y;
-       unsigned char* pixels = (unsigned char*) images[0]->getPixels();
-       std::cout<<"format "<<images[0]->getFormat()<<" "<<images[0]->getPacking()<<" "<<h<<" "<<w<<std::endl;
+    if(success) {
+      uint w = images[0]->getXres();
+      uint h = images[0]->getYres();
+      FLOAT pix_per_cell_x = 3*(FLOAT)h/(FLOAT)n_rows;
+      FLOAT pix_per_cell_y = 3*(FLOAT)w/(FLOAT)n_cols;
+      unsigned char* pixels = (unsigned char*) images[0]->getPixels();
+      //       std::cout<<"format "<<images[0]->getFormat()<<" "<<images[0]->getPacking()<<" "<<h<<" "<<w<<std::endl;
     
 #pragma omp parallel for
       for (uint i = 0; i < n_rows; ++i) {
       	uint x = i*pix_per_cell_x;
       	for (uint j = 0; j < n_cols; ++j) {
       	  uint y = j*pix_per_cell_y;
-	  // float val;
-	  // images[0]->getPixelValue(x, y, val);
 	  gr(i, j) = (uint)pixels[(uint)(x*w+y)]/256.0;
 	  if (gr(i,j) < 0.1) {
 	    gr(i,j) = 0;
 	  } else {
 	    gr(i, j) = 1;
 	  }
-	  //	  if (gr(i, j) != 0) {
-	  //std::cout<<"i j val "<<i<<" "<<j<<" "<<" "<<x<<" "<<y<<" "<<gr(i, j)<<std::endl;
-	    // }
-
 	}
 		
-	   }
-        // for (uint i = 0; i < images.size(); ++i) {
-	//   std::cout<<i<<std::endl;
-	//   delete images[i];
-        // }
-       delete images[0];
-//     } else {
-//       addError(SOP_ATTRIBUTE_INVALID, "cannot read file");
-//       // return error();
-     }
-//   } else {
-//     addError(SOP_ATTRIBUTE_INVALID, "cannot open file");
-//     // return error();
-   }
+      }
+      delete images[0];
+    }
+  }
   
-  // UT_String str;
-  // FILE(str, 0);
-  // //  height_field = IMG_Load(str);
-  // //std::cout<<"OPEN FILE "<<str<<std::endl;
-
-  //  if(height_field == 0) {
-  //    std::cout << "Erreur : " << SDL_GetError() << std::endl;
-  //    std::exit(1);
-  //  }
-  //   gr = Grid(600, 600);
-  //   gr.setValues(height_field);
-  //   SDL_FreeSurface(height_field);
 }
 
 
 OP_ERROR
 SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
 {
-  //  std::cout<<"cook "<<std::endl;
-
   // Flag the SOP as being time dependent (i.e. cook on time changes)
   flags().timeDep <= 0;
   float t = context.getTime();
   bool is_inter = INTER_SRC(t);
   
-   OP_AutoLockInputs inputs(this);
-    if (inputs.lock(context) >= UT_ERROR_ABORT)
-        return error();
+  OP_AutoLockInputs inputs(this);
+  if (inputs.lock(context) >= UT_ERROR_ABORT)
+    return error();
   
   gdp->clearAndDestroy();
 
@@ -239,7 +217,7 @@ SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
     addError(SOP_ATTRIBUTE_INVALID, "amplis_steps input sources");
     return error();
   }
-   GA_ROHandleI bs_handle(is->findAttribute(GA_ATTRIB_DETAIL, "buffer_size"));
+  GA_ROHandleI bs_handle(is->findAttribute(GA_ATTRIB_DETAIL, "buffer_size"));
   GA_ROHandleF damping_handle(is->findAttribute(GA_ATTRIB_DETAIL, "damping"));
   if (!bs_handle.isValid()) {
     addError(SOP_ATTRIBUTE_INVALID, "buffer sizes input sources");
@@ -250,9 +228,8 @@ SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
     return error();
   }
   int buffer_size = 2;
-  //std::cout<<"buffer siez init "<< buffer_sizes[w]<<" "<<w<<std::endl;
   if (is_inter) {
-    buffer_size= bs_handle.get(0);
+    buffer_size = bs_handle.get(0);
   }
   float damping = damping_handle.get(0);
    
@@ -274,56 +251,49 @@ SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
     std::list<VEC2> sources;
     int nb_points = 0;
     int k_max = 0 + wl*off/gr.getCellSize();
-  // if (k_max > 25) {
-  //   k_max = 25;
-  // }
+    // if (k_max > 25) {
+    //   k_max = 25;
+    // }
     Grid tmp_prev = gr;
     Grid tmp = gr ;
     for (int k = 0; k < k_max; ++k) {
-      std::cout<<"offset pixel "<<k<<" "<<k_max<<std::endl;
       tmp = tmp_prev;
       for (int i = 0; i < gr.getNbRows(); ++i) {
     	for (int j = 0; j < gr.getNbCols(); ++j) {
     	  if (tmp_prev(i, j) != 0 && (tmp_prev(i-1, j) == 0 || tmp_prev(i, j-1) == 0 || tmp_prev(i+1, j) == 0 || tmp_prev(i, j+1) == 0)) {
-    	    //	    std::cout<<"i j "<<i<<" "<<j<<" "<<tmp_prev(i, j)<<" "<<tmp_prev(i+1, j)<<std::endl;
-    	     tmp(i, j) = 0;
+	    tmp(i, j) = 0;
     	  }
     	}
       }
       tmp_prev = tmp;
     }
-   float os = 1.0/gr.getCellSize()/density;
+    float os = 1.0/gr.getCellSize()/density;
     if (wl >= 1) {
       os /= 2;
     }
     int offset = floor(os)+1;
     for (int i = 0; i < gr.getNbRows(); ++i) {
       for (int j = 0; j < gr.getNbCols(); ++j) {
-	//if (tmp(i, j) != 0) {
-	//   std::cout<<"i j val "<<i<<" "<<j<<" "<<tmp(i, j)<<std::endl;
-	// }
 	if (tmp(i, j) != 0 && (tmp(i-1, j) == 0 || tmp(i, j-1) == 0 || tmp(i+1, j) == 0 || tmp(i, j+1) == 0)) {
-    	bool no_neigh = true;
-    	 for (int k = -offset; k <= offset; ++k) {
-    	   for (int h = -offset; h <= offset; ++h) {
+	  bool no_neigh = true;
+	  for (int k = -offset; k <= offset; ++k) {
+	    for (int h = -offset; h <= offset; ++h) {
     	      if (tmp(i+k, j+h) == 0.5) {
     		no_neigh = false;
     		break;
     	      }
-    	  }
-    	}
+	    }
+	  }
 	
-    	 if (no_neigh) {
-	   //if (i == 1/* || i == gr.getNbRows()-2*/ || j == 1/* || j == gr.getNbRows()-2*/) {
-	  VEC2 pos = VEC2((i - gr.getNbRows()/2)*gr.getCellSize(), (j-gr.getNbCols()/2)*gr.getCellSize());
-    	   sources.push_back(pos);
-	   ++nb_points;
-	   tmp(i, j) = 0.5;
-	   }
+	  if (no_neigh) {
+	    VEC2 pos = VEC2((i - gr.getNbRows()/2)*gr.getCellSize(), (j-gr.getNbCols()/2)*gr.getCellSize());
+	    sources.push_back(pos);
+	    ++nb_points;
+	    tmp(i, j) = 0.5;
+	  }
 	}
       }
     }
-    std::cout<<"nb pts "<<nb_points<<" "<<sources.size()<<std::endl;
     GA_Offset ptoff = gdp->appendPointBlock(nb_points);
     GA_Offset vtxoff;
     GA_Offset prim_off = gdp->appendPrimitivesAndVertices(GA_PRIMPOLY, 1, nb_points, vtxoff, true);
@@ -353,7 +323,7 @@ SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
     addError(SOP_MESSAGE, "Failed to create attribute ampli_steps");
     return error();
   }
-   if (!bs_attrib.isValid()) {
+  if (!bs_attrib.isValid()) {
     bs_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_DETAIL, "buffer_size", 1));
   }
   if (!bs_attrib.isValid()) {
@@ -368,8 +338,8 @@ SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
     return error();
   }
 
- bs_attrib.set(0, buffer_size);
- damping_attrib.set(0, damping);
+  bs_attrib.set(0, buffer_size);
+  damping_attrib.set(0, damping);
 
   w = 0;
   GA_Offset prim_off, lcl_start, lcl_end;
@@ -391,16 +361,12 @@ SOP_Texture_Obstacle_Src::cookMySop(OP_Context &context)
   {
     GA_Offset ptoff; 
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
-       for (uint i = 0; i < buffer_size; ++i) {
-      ampli_attrib.set(ptoff, i, 0);
+      for (uint i = 0; i < buffer_size; ++i) {
+	ampli_attrib.set(ptoff, i, 0);
       }
-      // ampli_attrib.set(ptoff, 0, 0);
-      // ampli_attrib.set(ptoff, 1, 0);
     }
   }
   gdp->bumpDataIdsForAddOrRemove(true, true, true);
-  // wl_attrib->bumpDataId();
-  // as_attrib->bumpDataId();
 
   return error();
 }

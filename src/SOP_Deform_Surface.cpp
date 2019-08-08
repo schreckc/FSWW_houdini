@@ -23,10 +23,14 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
+ * Deform_Surface SOP
+ *----------------------------------------------------------------------------
+ * At first frame, compute the spectrum a each point of the grid (input 0) by 
+ * summing the contribution of all sources (each other input is a set of sources).
+ * At each frame, sum the contribution of each wavelength at each point to get 
+ * the height (according to the spectrum of the point).
  */
 
-/// This is the pure C++ implementation of the wave SOP.
-/// @see @ref HOM/SOP_HOMWave.py, @ref HOM/SOP_HOMWaveNumpy.py, @ref HOM/SOP_HOMWaveInlinecpp.py, @ref HOM/SOP_HOMWave.C, @ref SOP/SOP_VEXWave.vfl
 
 #include "SOP_Deform_Surface.hpp"
 
@@ -42,10 +46,7 @@
 
 #include "definitions.hpp"
 
-using namespace HDK_Sample;
-
-void
-newSopOperator(OP_OperatorTable *table)
+void newSopOperator(OP_OperatorTable *table)
 {
   table->addOperator(new OP_Operator(
 				     "def_surf_fs",
@@ -126,9 +127,6 @@ SOP_Deform_Surface::cookInputGroups(OP_Context &context, int alone)
 OP_ERROR
 SOP_Deform_Surface::cookMySop(OP_Context &context)
 {
-  // We must lock our inputs before we try to access their geometry.
-  // OP_AutoLockInputs will automatically unlock our inputs when we return.
-  // NOTE: Don't call unlockInputs yourself when using this!
   OP_AutoLockInputs inputs(this);
   if (inputs.lock(context) >= UT_ERROR_ABORT)
     return error();
@@ -145,118 +143,104 @@ SOP_Deform_Surface::cookMySop(OP_Context &context)
 
   float amp = AMP(t);
     
-  // Duplicate input geometry
-  duplicateSource(0, context);
+  duplicateSource(0, context); //grid
 
   GA_RWHandleV3 Phandle(gdp->findAttribute(GA_ATTRIB_POINT, "P"));
-  
-   int nb_wl = inputGeo(1)->getPrimitiveRange().getEntries();
-   GA_Offset ptoff;
-   GA_FOR_ALL_PTOFF(gdp, ptoff) {
-     UT_Vector3 Pvalue = gdp->getPos3(ptoff);
-     Pvalue.y() = 0;
-     gdp->setPos3(ptoff, Pvalue);
-   }
 
-   if (fr <= 1) {
-     GA_RWHandleF amplir_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli_r", nb_wl));
-     GA_RWHandleF amplii_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli_i", nb_wl));
-     if (!amplir_attrib.isValid()) {
-       amplir_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli_r", nb_wl));
-     }
-     if (!amplii_attrib.isValid()) {
-       amplii_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli_i", nb_wl));
-     }
-     GA_FOR_ALL_PTOFF(gdp, ptoff) {
-       for (int w = 0; w < nb_wl; ++w) {
-	 amplir_attrib.set(ptoff, w, 0);
-	 amplii_attrib.set(ptoff, w, 0);
-       }
-     }
-     
-  int nb_inputs = getInputsArraySize();
-  //  std::cout<<"nb inputs "<<nb_inputs<<std::endl;
-  for (int input = 1; input < nb_inputs; ++input) {
-    const GU_Detail *fs = inputGeo(input);
- GA_ROHandleF w_handle(fs->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
-    if (!w_handle.isValid()) {
-      addError(SOP_ATTRIBUTE_INVALID, "wavelengths");
-      return error();
-    }
-    // assert all inputs have same wl
+  // we assume that all input (1,..) have the same number of wavelength (same number of primitive)
+  int nb_wl = inputGeo(1)->getPrimitiveRange().getEntries();
+  GA_Offset ptoff;
+  GA_FOR_ALL_PTOFF(gdp, ptoff) {
+    UT_Vector3 Pvalue = gdp->getPos3(ptoff);
+    Pvalue.y() = 0;
+    gdp->setPos3(ptoff, Pvalue);
+  }
 
-    const GA_Attribute *afs = fs->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2);
-    if (!afs)	{
-      addError(SOP_ATTRIBUTE_INVALID, "ampli");
-      return error();
+  if (fr <= 1) {
+    // each point of the grid get list of complex ampli (one for each wavelength) (spectrum of the wave)
+    GA_RWHandleF amplir_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli_r", nb_wl));
+    GA_RWHandleF amplii_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli_i", nb_wl));
+    if (!amplir_attrib.isValid()) {
+      amplir_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli_r", nb_wl));
     }
-    const GA_AIFTuple *tuple = afs->getAIFTuple();
-    GA_Offset ptoff;
-    if (!tuple) {
-      addError(SOP_ATTRIBUTE_INVALID, "ampli tuple");
-      return error();
+    if (!amplii_attrib.isValid()) {
+      amplii_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli_i", nb_wl));
     }
-      
-    GA_Offset prim_off;
-    GA_Offset lcl_start, lcl_end;
-    int w = 0;
-    for (GA_Iterator lcl_it((fs)->getPrimitiveRange()); lcl_it.blockAdvance(lcl_start, lcl_end); ) {
-      for (prim_off = lcl_start; prim_off < lcl_end; ++prim_off) {
-	float wl = w_handle.get(prim_off);
-	float k = M_PI*2.0/wl;
-	float om = omega(k);//sqrtf(9.81*k + 0.074/1000*pow(k, 3));
-	//	std::cout<<"prim wl"<<prim_off<<" "<<wl<<std::endl;
-	const GA_Primitive* prim = fs->getPrimitive(prim_off);
-	GA_Range range = prim->getPointRange();
-
-	GA_Offset ptoff;
-	GA_FOR_ALL_PTOFF(gdp, ptoff) {
-	  UT_Vector3 Pvalue = gdp->getPos3(ptoff);
-	  //	  Pvalue.y() = 0;
-	  COMPLEX a = 0;//exp(std::complex<float>(0, 1)*(k*Pvalue.x()));
-	  for(GA_Iterator it = range.begin(); it != range.end(); ++it) {
-	    UT_Vector3 P_fs = fs->getPos3((*it));
-	    float r = sqrt(pow(Pvalue.x() - P_fs.x(), 2) + pow(Pvalue.z() - P_fs.z(), 2));
-	    float v = velocity(k, om);//0.5*omega/k;
-	    float ar = 0, ai = 0;
-	    // if (is_dynamic) {
-	    //   fpreal t_ret = t - r/v;
-	    //   OP_Context c_ret(t_ret);
-	    //   int f_ret = t_ret/dt;
-	    //   if (f_ret >= 0) {
-	    // 	const GU_Detail *fs_ret = myGDPLists[f_ret]; 
-	    // 	afs = fs_ret->findFloatTuple(GA_ATTRIB_POINT, "v", 2);
-	    // 	tuple = afs->getAIFTuple();
-	    // 	tuple->get(afs, ptoff_fs, ar, 0);
-	    // 	tuple->get(afs, ptoff_fs, ai, 1);
-	    //   }
-	    // } else {
-	    tuple->get(afs, *it, ar, 0);
-	    tuple->get(afs, *it, ai, 1);
-	    //}
-	    std::complex<float> ampli(ar, ai);
-	    a += ampli*fund_solution(k*r);
-	  }
-	  //UT_Vector3 nampli(real(a), imag(a), 0);
-	  float tmpr = amplir_attrib.get(ptoff, w);
-	  float tmpi = amplii_attrib.get(ptoff, w);
-	  amplir_attrib.set(ptoff, w, tmpr + real(a));
-	  amplii_attrib.set(ptoff, w, tmpi + imag(a));
-	  Pvalue.y() += real(amp*a*exp(-COMPLEX(0, 1)*(om*(float)t)));
-	  gdp->setPos3(ptoff, Pvalue);
-	}
-	++w;
+    GA_FOR_ALL_PTOFF(gdp, ptoff) {
+      for (int w = 0; w < nb_wl; ++w) {
+	amplir_attrib.set(ptoff, w, 0);
+	amplii_attrib.set(ptoff, w, 0);
       }
     }
-  }
-   amplir_attrib->bumpDataId();
-   amplii_attrib->bumpDataId();
-  } else {
+     
+    //compute the spectrum at each point of the grid
+    int nb_inputs = getInputsArraySize();
+    for (int input = 1; input < nb_inputs; ++input) { //all these inputs should be sets of sources
+      const GU_Detail *fs = inputGeo(input);
+      GA_ROHandleF w_handle(fs->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
+      if (!w_handle.isValid()) {
+	addError(SOP_ATTRIBUTE_INVALID, "wavelengths");
+	return error();
+      }
+   
+      const GA_Attribute *afs = fs->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2);
+      if (!afs)	{
+	addError(SOP_ATTRIBUTE_INVALID, "ampli");
+	return error();
+      }
+      const GA_AIFTuple *tuple = afs->getAIFTuple();
+      GA_Offset ptoff;
+      if (!tuple) {
+	addError(SOP_ATTRIBUTE_INVALID, "ampli tuple");
+	return error();
+      }
+
+      GA_Offset prim_off;
+      GA_Offset lcl_start, lcl_end;
+      int w = 0;
+      // add contribution of each wavelength
+      for (GA_Iterator lcl_it((fs)->getPrimitiveRange()); lcl_it.blockAdvance(lcl_start, lcl_end); ) {
+	for (prim_off = lcl_start; prim_off < lcl_end; ++prim_off) {
+	  float wl = w_handle.get(prim_off);
+	  float k = M_PI*2.0/wl;
+	  float om = omega(k);//sqrtf(9.81*k + 0.074/1000*pow(k, 3));
+	  const GA_Primitive* prim = fs->getPrimitive(prim_off);
+	  GA_Range range = prim->getPointRange();
+
+	  GA_Offset ptoff;
+	  GA_FOR_ALL_PTOFF(gdp, ptoff) {
+	    UT_Vector3 Pvalue = gdp->getPos3(ptoff);
+	    COMPLEX a = 0;//exp(std::complex<float>(0, 1)*(k*Pvalue.x()));
+	    for(GA_Iterator it = range.begin(); it != range.end(); ++it) {
+	      UT_Vector3 P_fs = fs->getPos3((*it));
+	      float r = sqrt(pow(Pvalue.x() - P_fs.x(), 2) + pow(Pvalue.z() - P_fs.z(), 2));
+	      //	      float v = velocity(k, om);//0.5*omega/k;
+	      float ar = 0, ai = 0;
+	      tuple->get(afs, *it, ar, 0);
+	      tuple->get(afs, *it, ai, 1);
+	      std::complex<float> ampli(ar, ai);
+	      a += ampli*fund_solution(k*r);
+	    }
+	    float tmpr = amplir_attrib.get(ptoff, w);
+	    float tmpi = amplii_attrib.get(ptoff, w);
+	    amplir_attrib.set(ptoff, w, tmpr + real(a));
+	    amplii_attrib.set(ptoff, w, tmpi + imag(a));
+	    Pvalue.y() += real(amp*a*exp(-COMPLEX(0, 1)*(om*(float)t)));
+	    gdp->setPos3(ptoff, Pvalue);
+	  }
+	  ++w;
+	}
+      }
+    }
+    amplir_attrib->bumpDataId();
+    amplii_attrib->bumpDataId();
+
+  } else {  //sum the contribution of each wavelength to get the height at each point
+
     GA_Offset prim_off;
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
       UT_Vector3 Pvalue = gdp->getPos3(ptoff);
-      //Pvalue.y() = 0;
-   
+    
       const GU_Detail *fs = inputGeo(1);
       GA_ROHandleF w_handle(fs->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
       GA_Offset lcl_start, lcl_end;
@@ -270,13 +254,13 @@ SOP_Deform_Surface::cookMySop(OP_Context &context)
 	addError(SOP_ATTRIBUTE_INVALID, "ampli imag");
 	return error();
       }
+      
       int w = 0;
       for (GA_Iterator lcl_it((fs)->getPrimitiveRange()); lcl_it.blockAdvance(lcl_start, lcl_end); ) {
 	for (prim_off = lcl_start; prim_off < lcl_end; ++prim_off) {
 	  float wl = w_handle.get(prim_off);
 	  float k = M_PI*2.0/wl;
 	  float om = omega(k);//sqrtf(9.81*k + 0.074/1000*pow(k, 3));
-	  //	  std::cout<<"prim "<<prim_off<<" "<<w<<" "<<wl<<std::endl;
 	  float ar = 1, ai = 0;
 	  ar = amplir_attrib.get(ptoff, w);
 	  ai = amplii_attrib.get(ptoff, w);
@@ -289,92 +273,6 @@ SOP_Deform_Surface::cookMySop(OP_Context &context)
 
     }
   }
-  //    const float period = w_handle.get(GA_Offset(0));
-  //    float k = M_PI*2.0/period;
-  //    float omega = omega(k);//sqrtf(9.81*k + 0.074/1000*pow(k, 3));
-  //    // NOTE: If you are only interested in the P attribute, use gdp->getP(),
-  //    //       or don't bother making a new GA_RWHandleV3, and just use
-  //    //       gdp->getPos3(ptoff) and gdp->setPos3(ptoff, Pvalue).
-  //    //       This just gives an example supplying an attribute name.
-    
-  //    GA_RWHandleV3 Phandle(gdp->findAttribute(GA_ATTRIB_POINT, "P"));
-  //      const GA_Attribute *afs = fs->findFloatTuple(GA_ATTRIB_POINT, "v", 2);
-  //    if (!afs)
-  //      {
-  // 	addError(SOP_ATTRIBUTE_INVALID, "v");
-  // 	return error();
-  //      }
-  //    const GA_AIFTuple *tuple = afs->getAIFTuple();
-  //    GA_Offset ptoff;
-  //    if (!tuple)
-  //    {
-  //      addError(SOP_ATTRIBUTE_INVALID, "v tuple");
-  //      return error();
-  //    }
-  //    GA_RWHandleV3 vhandle(gdp->findAttribute(GA_ATTRIB_POINT, "v"));
-  //    if (!vhandle.isValid())
-  //    {
-  //      addError(SOP_ATTRIBUTE_INVALID, "v");
-  //      return error();
-  //    }
-  //    if (fr <= 1) {
-  //    GA_FOR_ALL_PTOFF(gdp, ptoff)
-  //    {
-  //      GA_Offset ptoff_fs;
-  //      UT_Vector3 Pvalue = gdp->getPos3(ptoff);
-  //      Pvalue.y() = 0;
-  //      COMPLEX a = 0;//exp(std::complex<float>(0, 1)*(k*Pvalue.x()));
-  //      GA_FOR_ALL_PTOFF(fs, ptoff_fs) {
-  //      	UT_Vector3 P_fs = fs->getPos3(ptoff_fs);
-  //      	float r = sqrt(pow(Pvalue.x() - P_fs.x(), 2) + pow(Pvalue.z() - P_fs.z(), 2));
-  //      	float v = velocity(k, omega);//0.5*omega/k;
-  //      	float ar = 0, ai = 0;
-  //      	if (is_dynamic) {
-  //      	fpreal t_ret = t - r/v;
-  //      	OP_Context c_ret(t_ret);
-  //      	int f_ret = t_ret/dt;
-
-  //      	 if (f_ret >= 0) {
-  //      	   const GU_Detail *fs_ret = myGDPLists[f_ret]; 
-  //      	   afs = fs_ret->findFloatTuple(GA_ATTRIB_POINT, "v", 2);
-  //      	   tuple = afs->getAIFTuple();
-  //      	   tuple->get(afs, ptoff_fs, ar, 0);
-  //      	   tuple->get(afs, ptoff_fs, ai, 1);
-  //      	 }
-  //      	} else {
-  //      	  // afs = fs->findFloatTuple(GA_ATTRIB_POINT, "v", 2);
-  //      	  tuple->get(afs, ptoff_fs, ar, 0);
-  //      	  tuple->get(afs, ptoff_fs, ai, 1);
-  //      	}
-  //      	std::complex<float> ampli(ar, ai);
-
-  //      	a += ampli*fund_solution(k*r);
-  // 	  //std::complex<float>(0, -1)/(float)4.0*sqrtf(2.0f/(M_PI*k*r))*exp(std::complex<float>(0, 1)*(k*r - (float)M_PI/4.0f));
-  //             	//	  (-i_)/(FLOAT)4.0*Hankel(x0)*exp(i_*ph);//sqrtf((FLOAT)2.0/((FLOAT)M_PI*x0))*exp(i_*(x0 - (FLOAT)(M_PI/4.0)));
-  //      }
-  //      UT_Vector3 nampli(real(a), imag(a), 0);
-  //      vhandle.set(ptoff, nampli);
-  //      Pvalue.y() = real(amp*a*exp(-COMPLEX(0, 1)*(omega*(float)t + phase)));
-
-  //      gdp->setPos3(ptoff, Pvalue);
-      
-  //    }
-  //    vhandle.bumpDataId();
-    
-  //    } else {
-  //      afs = gdp->findFloatTuple(GA_ATTRIB_POINT, "v", 2);
-  //      GA_FOR_ALL_PTOFF(gdp, ptoff) {
-  //    	  UT_Vector3 Pvalue = gdp->getPos3(ptoff);
-  //    	  float ar = 1, ai = 0;
-  //    	  tuple->get(afs, ptoff, ar, 0);
-  //    	  tuple->get(afs, ptoff, ai, 1);
-  //    	  std::complex<float> a(ar, ai);
-  //    	  Pvalue.y() = real(amp*a*exp(-COMPLEX(0, 1)*(omega*(float)t + phase)));
-  //      gdp->setPos3(ptoff, Pvalue);
-  //    	}
-  // }
-  //    // If we've modified an attribute, and we're managing our own data IDs,
-  //    // we must bump the data ID for that attribute.
   Phandle.bumpDataId();
   return error();
 }

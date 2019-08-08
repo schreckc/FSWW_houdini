@@ -23,10 +23,12 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
+ * Solve FS interactive (aperiodic) SOP
+ *----------------------------------------------------------------------------
+ * Compute amplitude of the obstacle sources (input 0) such that the boundary condition are
+ * respected (as well as possible, least square) at the boundary points (input 1) given the
+ * incoming waves (input 2).
  */
-
-/// This is the pure C++ implementation of the wave SOP.
-/// @see @ref HOM/SOP_HOMWave.py, @ref HOM/SOP_HOMWaveNumpy.py, @ref HOM/SOP_HOMWaveInlinecpp.py, @ref HOM/SOP_HOMWave.C, @ref SOP/SOP_VEXWave.vfl
 
 #include "SOP_Solve_FS_inter.hpp"
 
@@ -40,11 +42,8 @@
 #include <UT/UT_DSOVersion.h>
 #include <SYS/SYS_Math.h>
 
-using namespace HDK_Sample;
 
-
-void
-newSopOperator(OP_OperatorTable *table)
+void newSopOperator(OP_OperatorTable *table)
 {
   table->addOperator(new OP_Operator(
 				     "solve_fs_inter",
@@ -75,15 +74,6 @@ SOP_Solve_FS_inter::myConstructor(OP_Network *net, const char *name, OP_Operator
 SOP_Solve_FS_inter::SOP_Solve_FS_inter(OP_Network *net, const char *name, OP_Operator *op)
   : SOP_Node(net, name, op)
 {
-  // int size_buffer = 500;
-  // myGDPLists = UT_Array<const GU_Detail *>(size_buffer);
-  // myISLists = UT_Array<const GU_Detail *>(size_buffer);
-  // gdp_count = 0;
-  // for (uint i = 0; i < size_buffer; ++i) {
-  //   myGDPLists[i] = NULL;
-  //   myISLists[i] = NULL;
-  // }
-    
   // This indicates that this SOP manually manages its data IDs,
   // so that Houdini can identify what attributes may have changed,
   // e.g. to reduce work for the viewport, or other SOPs that
@@ -98,12 +88,7 @@ SOP_Solve_FS_inter::SOP_Solve_FS_inter(OP_Network *net, const char *name, OP_Ope
 }
 
 SOP_Solve_FS_inter::~SOP_Solve_FS_inter() {
-   // for (uint i = 0; i < gdp_count; ++i) {
-   //   delete myGDPLists[i];
-   //   delete myISLists[i];
-   //   myGDPLists[i] = NULL;
-   //   myISLists[i] = NULL;
-   // }
+
 }
 OP_ERROR
 SOP_Solve_FS_inter::cookInputGroups(OP_Context &context, int alone)
@@ -131,51 +116,26 @@ SOP_Solve_FS_inter::cookInputGroups(OP_Context &context, int alone)
 OP_ERROR
 SOP_Solve_FS_inter::cookMySop(OP_Context &context)
 {
-  // We must lock our inputs before we try to access their geometry.
-  // OP_AutoLockInputs will automatically unlock our inputs when we return.
-  // NOTE: Don't call unlockInputs yourself when using this!
   OP_AutoLockInputs inputs(this);
   if (inputs.lock(context) >= UT_ERROR_ABORT)
     return error();
 
-  //
   // Flag the SOP as being time dependent (i.e. cook on time changes)
   flags().timeDep = 1;
   
-  //   gdp->clearAndDestroy();
   duplicateSource(0, context);
-  // fpreal frame = OPgetDirector()->getChannelManager()->getSample(context.getTime());
-  // frame *= 0.03;
   float t = context.getTime();
   int fr = context.getFrame();
   float dt = 0.1;
   t = dt*fr;
-  // if (fr != 0) {
-  //   dt = t/fr;
-  // }
   
-  //const GU_Detail *fsi = inputGeo(0); //sources
   const GU_Detail *bp = inputGeo(1); //boundary points
   const GU_Detail *is = inputGeo(2); //input sources
 
-  // int nb_bp= bp->getNumPoints(); // nb of boundary points, should be diff for each freq
   int nb_wl = is->getPrimitiveRange().getEntries();
-  //  int nb_fs = fsi->getNumPoints(); //should be diff for each freq
-
-  //
-  // myGDPLists[gdp_count] = new GU_Detail(gdp);
-  // ++gdp_count;  //moved at the end of the function
-  //  std::cout<<"frame "<<fr<<" "<<gdp_count<<std::endl;
-
   
   if (fr == 1) {
-     // for (uint i = 0; i < gdp_count; ++i) {
-     //   delete myGDPLists[i];
-     //   delete myISLists[i];
-     //   myGDPLists[i] = NULL;
-     //   myISLists[i] = NULL;
-     // }
-    //     gdp_count = 0;
+    // get wavelenght range and time step for each wavelength from input sources
     wave_lengths = std::vector<float>(nb_wl);
     ampli_steps = std::vector<int>(nb_wl);
     p_in = std::vector<VectorXcf>(nb_wl);
@@ -200,177 +160,156 @@ SOP_Solve_FS_inter::cookMySop(OP_Context &context)
       ampli_steps[w]= as_handle.get(prim_off);
     }
     
-  GA_ROHandleI bs_handle(is->findAttribute(GA_ATTRIB_DETAIL, "buffer_size"));
-  GA_ROHandleF damping_handle(is->findAttribute(GA_ATTRIB_DETAIL, "damping"));
-  if (!bs_handle.isValid()) {
-    addError(SOP_ATTRIBUTE_INVALID, "buffer sizes input sources");
-    return error();
-  }
-  if (!damping_handle.isValid()) {
-    addError(SOP_ATTRIBUTE_INVALID, "damping input sources");
-    return error();
-  }
-   buffer_size = bs_handle.get(0);
-   damping_coef = damping_handle.get(0);
+    GA_ROHandleI bs_handle(is->findAttribute(GA_ATTRIB_DETAIL, "buffer_size"));
+    GA_ROHandleF damping_handle(is->findAttribute(GA_ATTRIB_DETAIL, "damping"));
+    if (!bs_handle.isValid()) {
+      addError(SOP_ATTRIBUTE_INVALID, "buffer sizes input sources");
+      return error();
+    }
+    if (!damping_handle.isValid()) {
+      addError(SOP_ATTRIBUTE_INVALID, "damping input sources");
+      return error();
+    }
+    buffer_size = bs_handle.get(0);
+    damping_coef = damping_handle.get(0);
 
     // create transfer matrix
-  for (int w = 0; w < nb_wl; ++w) {
-    float wl = wave_lengths[w];
-     int as = ampli_steps[w];
-    float k = M_PI*2.0/wl;
-    float v = velocity(k);
-    const GA_Primitive* prim_fs = gdp->getPrimitiveByIndex(w);
-    GA_Range range_fs = prim_fs->getPointRange();
-    int nb_fs = range_fs.getEntries();
-    const GA_Primitive* prim_bp = bp->getPrimitiveByIndex(w);
-    GA_Range range_bp = prim_bp->getPointRange();
-    int nb_bp = range_bp.getEntries();
-    MatrixXcf T = MatrixXcf(nb_bp, nb_fs);
-    uint i = 0, j = 0;
-    for(GA_Iterator itfs = range_fs.begin(); itfs != range_fs.end(); ++itfs) {
-      UT_Vector3 pos_fs = gdp->getPos3(*itfs);
-      i = 0;
-      uint nb_bp = 0;
-      for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
-	UT_Vector3 pos_b = bp->getPos3(*itbp);
-	float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
-	float ret = r/v;
-	float q = interpolation(ret, 0, dt*as);
-	//	std::cout<<"i j "<<i<<" "<<j<<" "<<nb_fs<<" "<<nb_bp<<" "<<k<<" "<<r<<" "<<pos_b(0)<<" "<<pos_fs(0)<<std::endl;
-	if (q > 0) {
-	  q = 1;
-	  T(i, j) = q*fund_solution(k*r);
-	  ++nb_bp;
-	} else {
-	  T(i, j) = 0;
+    for (int w = 0; w < nb_wl; ++w) {
+      float wl = wave_lengths[w];
+      int as = ampli_steps[w];
+      float k = M_PI*2.0/wl;
+      float v = velocity(k);
+      const GA_Primitive* prim_fs = gdp->getPrimitiveByIndex(w);
+      GA_Range range_fs = prim_fs->getPointRange();
+      int nb_fs = range_fs.getEntries();
+      const GA_Primitive* prim_bp = bp->getPrimitiveByIndex(w);
+      GA_Range range_bp = prim_bp->getPointRange();
+      int nb_bp = range_bp.getEntries();
+      MatrixXcf T = MatrixXcf(nb_bp, nb_fs);
+      uint i = 0, j = 0;
+      for(GA_Iterator itfs = range_fs.begin(); itfs != range_fs.end(); ++itfs) {
+	UT_Vector3 pos_fs = gdp->getPos3(*itfs);
+	i = 0;
+	uint nb_bp = 0;
+	for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
+	  UT_Vector3 pos_b = bp->getPos3(*itbp);
+	  float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
+	  float ret = r/v;
+	  float q = interpolation(ret, 0, dt*as);
+	  if (q > 0) {
+	    q = 1;
+	    T(i, j) = q*fund_solution(k*r);
+	    ++nb_bp;
+	  } else {
+	    T(i, j) = 0;
+	  }
+	  ++i;
 	}
-	++i;
+	std::cout<<"nb bp infuenced "<<nb_bp<<" "<<j<<std::endl;
+	++j;
       }
-      std::cout<<"nb bp infuenced "<<nb_bp<<" "<<j<<std::endl;
-      ++j;
+      svd[w] =  BDCSVD<MatrixXcf>(T,ComputeThinU | ComputeThinV);
     }
-    //    std::cout<<T<<std::endl;
-    svd[w] =  BDCSVD<MatrixXcf>(T,ComputeThinU | ComputeThinV);
-  }
   }
 
-  //  myISLists[gdp_count] = new GU_Detail(is);
-  
   const GA_Attribute *afs;
   const GA_AIFTuple *tuple; 
-    // fill the p_in for each frequencies
+  // fill the p_in for each wavelength
   GA_ROHandleF a_handle(is->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   for (int w = 0; w < nb_wl; ++w) {
     int as = ampli_steps[w];
-    // std::cout<<"frame as "<<fr<<" "<<as<<std::endl;
     if (fr%as == 0) {
       
-    float wl = wave_lengths[w];
-    float k = M_PI*2.0/wl;
-    int i = 0;
-    const GA_Primitive* prim_bp = bp->getPrimitiveByIndex(w);
-    GA_Range range_bp = prim_bp->getPointRange();
-    int nb_bp = range_bp.getEntries();
-     p_in[w] = VectorXcf(nb_bp);
-    for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
-      UT_Vector3 pos_b = bp->getPos3(*itbp);
-       p_in[w](i) = 0;
-       // add contribution from input sources
-      const GA_Primitive* prim_is = is->getPrimitiveByIndex(w);
-      GA_Range range_is = prim_is->getPointRange();
-      for(GA_Iterator it = range_is.begin(); it != range_is.end(); ++it) {
-      	UT_Vector3 pos_is = is->getPos3(*it);
-      	 float r = sqrt(pow(pos_b.x() - pos_is.x(), 2) + pow(pos_b.z() - pos_is.z(), 2));
-      	 float v = velocity(k);
-      	 fpreal t_ret = t - r/v;
-      	 OP_Context c_ret(t_ret);
-	 int f_ret = floor((t_ret)/(dt*as))+1;
-      	 // int f_ret = floor(t_ret/dt);
-	 // f_ret = floor((float)f_ret/(float)as);
-      	 float ar = 0, ai = 0;
+      float wl = wave_lengths[w];
+      float k = M_PI*2.0/wl;
+      int i = 0;
+      const GA_Primitive* prim_bp = bp->getPrimitiveByIndex(w);
+      GA_Range range_bp = prim_bp->getPointRange();
+      int nb_bp = range_bp.getEntries();
+      p_in[w] = VectorXcf(nb_bp);
+      for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
+	UT_Vector3 pos_b = bp->getPos3(*itbp);
+	p_in[w](i) = 0;
+	// add contribution from input sources
+	const GA_Primitive* prim_is = is->getPrimitiveByIndex(w);
+	GA_Range range_is = prim_is->getPointRange();
+	for(GA_Iterator it = range_is.begin(); it != range_is.end(); ++it) {
+	  UT_Vector3 pos_is = is->getPos3(*it);
+	  float r = sqrt(pow(pos_b.x() - pos_is.x(), 2) + pow(pos_b.z() - pos_is.z(), 2));
+	  float v = velocity(k);
+	  fpreal t_ret = t - r/v;
+	  OP_Context c_ret(t_ret);
+	  int f_ret = floor((t_ret)/(dt*as))+1;
+	  float ar = 0, ai = 0;
       	  if (f_ret >= 1) {
-	    //  const GU_Detail *fs_ret = myISLists[f_ret]; 
-      	   afs = is->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size);
-      	   tuple = afs->getAIFTuple();
-      	   tuple->get(afs, *it, ar, 2*f_ret);
-      	   tuple->get(afs, *it, ai, 2*f_ret+1);
-      	 }
+	    afs = is->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size);
+	    tuple = afs->getAIFTuple();
+	    tuple->get(afs, *it, ar, 2*f_ret);
+	    tuple->get(afs, *it, ai, 2*f_ret+1);
+	  }
       	  std::complex<float> ampli(ar, ai);
       	  p_in[w](i) -= ampli*fund_solution(k*r)*damping(damping_coef, r, k);
-      }
-      // //      add contribution from other sources of the obstacle
-      const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
-      GA_Range range = prim->getPointRange();
-      for(GA_Iterator it = range.begin(); it != range.end(); ++it) {
-      	UT_Vector3 pos_fs = gdp->getPos3(*it);
-      	 float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
-      	float ret = r/velocity(k);
-	int f_ret = floor((t - ret)/(dt*as))+1;
-	// int f_ret = floor(t-ret/dt);
-	// f_ret = floor((float)f_ret/(float)as);
-	if (ret > t) {
-	  --f_ret;
 	}
-      	float q = interpolation(ret, 0, (dt*as));
-      	float ar = 0, ai = 0;
-      	if (q <= 0) {
-      	   if (f_ret >= 0) {
-	     //	     const GU_Detail *fs_ret = myGDPLists[f_ret]; 
+	// add contribution from other sources of the obstacle
+	const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
+	GA_Range range = prim->getPointRange();
+	for(GA_Iterator it = range.begin(); it != range.end(); ++it) {
+	  UT_Vector3 pos_fs = gdp->getPos3(*it);
+	  float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
+	  float ret = r/velocity(k);
+	  int f_ret = floor((t - ret)/(dt*as))+1;
+	  if (ret > t) {
+	    --f_ret;
+	  }
+	  float q = interpolation(ret, 0, (dt*as));
+	  float ar = 0, ai = 0;
+	  if (q <= 0) {
+	    if (f_ret >= 0) {
       	      afs = gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size);
       	      tuple = afs->getAIFTuple();
       	      tuple->get(afs, *it, ar, 2*f_ret);
       	      tuple->get(afs, *it, ai, 2*f_ret+1);
-	      //      std::cout<<"f_ret "<<f_ret<<"  "<<*it<<" "<<*itbp<<" "<<t<<" "<<ret<<" ("<<ar<<","<<ai<<")"<<std::endl;
       	    }
-      	  COMPLEX a(ar, ai);
-	  p_in[w](i) -= 0.8f*a*fund_solution(k*r)*damping(damping_coef, r, k);
-      	} else {
-      	  // if (f_ret >= 1) {
-      	  //   const GU_Detail *fs_ret_prev = myGDPLists[f_ret-1]; 
-      	  //   afs = fs_ret_prev->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2);
-      	  //   tuple = afs->getAIFTuple();
-      	  //   tuple->get(afs, *it, ar, 0);
-      	  //   tuple->get(afs, *it, ai, 1);
-      	  // }
-      	  // COMPLEX a_prev(ar, ai);
-	  // COMPLEX ampli = (1-q)*a_prev;
-	  // //COMPLEX ampli = a_prev;
-	  //  p_in[w](i) -= ampli*fund_solution(k*r);
-      	}
+	    COMPLEX a(ar, ai);
+	    p_in[w](i) -= 0.8f*a*fund_solution(k*r)*damping(damping_coef, r, k);
+	  } else {
+	    // if (f_ret >= 1) {
+	    //   const GU_Detail *fs_ret_prev = myGDPLists[f_ret-1]; 
+	    //   afs = fs_ret_prev->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2);
+	    //   tuple = afs->getAIFTuple();
+	    //   tuple->get(afs, *it, ar, 0);
+	    //   tuple->get(afs, *it, ai, 1);
+	    // }
+	    // COMPLEX a_prev(ar, ai);
+	    // COMPLEX ampli = (1-q)*a_prev;
+	    // //COMPLEX ampli = a_prev;
+	    //  p_in[w](i) -= ampli*fund_solution(k*r);
+	  }
+	}
+	++i;
       }
-       ++i;
-  }
-    //    std::cout<<p_in[w]<<std::endl;
     }
   }
   
-  // solve for each frequencies
+  // solve for each wavelength and set new anpli
   GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   for (int w = 0; w < nb_wl; ++w) {
     int as = ampli_steps[w];
     if (fr%as == 0) {
-    // float wl = wave_lengths[w];
-    // float k = M_PI*2.0/wl;
-    const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
-    GA_Range range = prim->getPointRange();
-    int nb_es = range.getEntries();
-    VectorXcf c(nb_es);
-    //    std::cout<<"pin\n"<<p_in[w]<<std::endl;
-    c = svd[w].solve(p_in[w]);
-    //    std::cout<<"c\n"<<c<<std::endl;
-    int i = 0;
-    for(GA_Iterator it = range.begin(); it != range.end(); ++it, ++i) {
-      ampli_attrib.set(*it, 2*(fr/as), real(c[i]));
-      ampli_attrib.set(*it, 2*(fr/as)+1, imag(c[i]));
-    }
-     ampli_attrib.bumpDataId();
+      const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
+      GA_Range range = prim->getPointRange();
+      int nb_es = range.getEntries();
+      VectorXcf c(nb_es);
+      c = svd[w].solve(p_in[w]);
+      int i = 0;
+      for(GA_Iterator it = range.begin(); it != range.end(); ++it, ++i) {
+	ampli_attrib.set(*it, 2*(fr/as), real(c[i]));
+	ampli_attrib.set(*it, 2*(fr/as)+1, imag(c[i]));
+      }
+      ampli_attrib.bumpDataId();
     }
   }
  
-  // myGDPLists[gdp_count] = new GU_Detail(gdp);
-  // ++gdp_count;
- 
-  
   return error();
 }
 

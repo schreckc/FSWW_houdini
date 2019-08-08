@@ -23,7 +23,10 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
- * Deform_Surface_inter SOP
+ * Deform_Surface interactive (aperiodic) SOP
+ *----------------------------------------------------------------------------
+ * At each frame, sum the contribution of all the inputs for all wavelengths
+ * at each point to get the height.
  */
 
 

@@ -23,7 +23,11 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
- * Wave_Source SOP
+ * Solve FS interactive (aperiodic) SOP
+ *----------------------------------------------------------------------------
+ * Compute amplitude of the obstacle sources (input 0) such that the boundary condition are
+ * respected (as well as possible, least square) at the boundary points (input 1) given the
+ * incoming waves (input 2).
  */
 
 
@@ -34,10 +38,6 @@
 #include "definitions.hpp"
 #include <Eigen/SVD>
 
-namespace HDK_Sample {
-
-/// Pure C++ implementation of @ref SOP_HOMWave
-/// @see SOP_HOMWave, vex_wave(), @ref HOM/SOP_HOMWave.py
 class SOP_Solve_FS_inter : public SOP_Node
 {
 public:
@@ -62,9 +62,6 @@ private:
     /// by the method "cookInputGroups".
     const GA_PointGroup *myGroup;
 
-  int gdp_count;
-  UT_Array<const GU_Detail*> myGDPLists;
-  UT_Array<const GU_Detail*> myISLists;
   std::vector<float> wave_lengths;
   std::vector<int> ampli_steps;
   std::vector<VectorXcf> p_in;
@@ -72,6 +69,5 @@ private:
   int buffer_size;
   float damping_coef;
 };
-} // End of HDK_Sample namespace
 
 #endif

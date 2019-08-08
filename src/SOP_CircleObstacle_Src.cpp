@@ -23,10 +23,20 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
+ * Circle Obstacle SOP
+ *---------------------------------------------------------------------------
+ * Create set of point sources along an offset surface of the obstacle.
+ * Range of wavelength (and time step per wl), and is copied from input geometry, as well as
+ *    the detail attibute.
+ * Create on primitve and subset of sources for each wl.
+ * Spacing depends on the wavelength and the parameter "density".
+ * I use this node also to create a set of point sampling the border of the obstacle (offset=0)
+ *    for the boundary conditions.
+ * Note: the density of the boundary points should be at least twice the density of the
+ *    sources.
+ * Note 2: for the aperiodic version, do not forget to check the "interactive sources" box in
+ *   the parameter of the node creating the sources of the obstacle.
  */
-
-/// This is the pure C++ implementation of the wave SOP.
-/// @see @ref HOM/SOP_HOMWave.py, @ref HOM/SOP_HOMWaveNumpy.py, @ref HOM/SOP_HOMWaveInlinecpp.py, @ref HOM/SOP_HOMWave.C, @ref SOP/SOP_VEXWave.vfl
 
 #include "SOP_CircleObstacle_Src.hpp"
 
@@ -43,10 +53,8 @@
 #include "definitions.hpp"
 #include <vector>
 
-using namespace HDK_Sample;
 
-void
-newSopOperator(OP_OperatorTable *table)
+void newSopOperator(OP_OperatorTable *table)
 {
   table->addOperator(new OP_Operator(
 				     "circle_obstacle_src_fs",
@@ -134,17 +142,18 @@ SOP_Circle_Obstacle_Src::cookInputGroups(OP_Context &context, int alone)
 OP_ERROR
 SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
 {
-  // Flag the SOP as being time dependent (i.e. cook on time changes)
+  // Flag the SOP as being time independent (i.e. cook on time changes)
   flags().timeDep = 0;
   float t = context.getTime();
   bool is_inter = INTER_SRC(t);
-   OP_AutoLockInputs inputs(this);
-    if (inputs.lock(context) >= UT_ERROR_ABORT)
-        return error();
+  OP_AutoLockInputs inputs(this);
+  if (inputs.lock(context) >= UT_ERROR_ABORT)
+    return error();
   
   gdp->clearAndDestroy();
 
-    const GU_Detail *is = inputGeo(0); //input sources (used to get wavelength)
+  // get details and primitives attibutes from the input sources
+  const GU_Detail *is = inputGeo(0); //input sources
   int nb_wl = is->getPrimitiveRange().getEntries();
     
   std::vector<float> wave_lengths(nb_wl);
@@ -152,7 +161,7 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
 
   GA_ROHandleF w_handle(is->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
   GA_ROHandleF as_handle(is->findAttribute(GA_ATTRIB_PRIMITIVE, "ampli_steps"));
-   if (!w_handle.isValid()) {
+  if (!w_handle.isValid()) {
     addError(SOP_ATTRIBUTE_INVALID, "wavelengths input sources");
     return error();
   }
@@ -160,7 +169,7 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
     addError(SOP_ATTRIBUTE_INVALID, "amplis_steps input sources");
     return error();
   }
-
+  
   GA_ROHandleI bs_handle(is->findAttribute(GA_ATTRIB_DETAIL, "buffer_size"));
   GA_ROHandleF damping_handle(is->findAttribute(GA_ATTRIB_DETAIL, "damping"));
   if (!bs_handle.isValid()) {
@@ -171,13 +180,11 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
     addError(SOP_ATTRIBUTE_INVALID, "damping input sources");
     return error();
   }
-  
-   int buffer_size = 2;
-    //std::cout<<"buffer siez init "<< buffer_sizes[w]<<" "<<w<<std::endl;
-   if (is_inter) {
-     buffer_size= bs_handle.get(0);
-   }
-   float damping = damping_handle.get(0);
+  int buffer_size = 2;
+  if (is_inter) {
+    buffer_size= bs_handle.get(0);
+  }
+  float damping = damping_handle.get(0);
    
   int w = 0;
   GA_Range range_is = is->getPrimitiveRange();
@@ -186,13 +193,9 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
     float wl = w_handle.get(prim_off);
     wave_lengths[w] = wl;
     ampli_steps[w]= as_handle.get(prim_off);
-    // buffer_sizes[w]= 2;
-    // //std::cout<<"buffer siez init "<< buffer_sizes[w]<<" "<<w<<std::endl;
-    // if (is_inter) {
-    //   buffer_sizes[w]= bs_handle.get(prim_off);
-    // }
   }
 
+  //create set of points for each wavelength, and liked them to their corresponding primitve
   for (int w = 0; w < nb_wl; ++w) {
     float wl = wave_lengths[w];
     float density = DENSITY(t)/wl;
@@ -214,7 +217,6 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
     GA_Offset prim_off = gdp->appendPrimitivesAndVertices(GA_PRIMPOLY, 1, nb_points, vtxoff, true);
     for (int i = 0; i < nb_points;  ++i) {
       VEC3 pos = center + radius*dir;
-      //      std::cout<<"pos "<<pos(0)<<" "<<pos(1)<<" "<<pos(2)<<std::endl;
       gdp->getTopology().wireVertexPoint(vtxoff+i,ptoff+i);
       gdp->setPos3(ptoff+i, UT_Vector3(pos(0), pos(1), pos(2)));
       dir = rotation*dir;
@@ -223,6 +225,7 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
 
   }
 
+  // create and set attibutes for primitves and detail
   GA_RWHandleF wl_attrib(gdp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "wavelengths", 1));
   GA_RWHandleF as_attrib(gdp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "ampli_steps", 1));
   GA_RWHandleF bs_attrib(gdp->findFloatTuple(GA_ATTRIB_DETAIL, "buffer_size", 1));
@@ -256,35 +259,20 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
     return error();
   }
 
- bs_attrib.set(0, buffer_size);
- damping_attrib.set(0, damping);
+  bs_attrib.set(0, buffer_size);
+  damping_attrib.set(0, damping);
   
   w = 0;
-   GA_Offset prim_off, lcl_start, lcl_end;
+  GA_Offset prim_off, lcl_start, lcl_end;
   for (GA_Iterator lcl_it((gdp)->getPrimitiveRange()); lcl_it.blockAdvance(lcl_start, lcl_end); ) {
     for (prim_off = lcl_start; prim_off < lcl_end; ++prim_off) {
       wl_attrib.set(prim_off, wave_lengths[w]);
       as_attrib.set(prim_off, ampli_steps[w]);
-      //   bs_attrib.set(prim_off, buffer_sizes[w]);
-      // GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_sizes[0]));
-      // if (!ampli_attrib.isValid()) {
-      // 	ampli_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_sizes[0]));
-      // }
-      // if (!ampli_attrib.isValid()) {
-      // 	addError(SOP_MESSAGE, "Failed to create attribute ampli");
-      // 	return error();
-      // }
-      // const GA_Primitive* prim = gdp->getPrimitive(prim_off);
-      // GA_Range range = prim->getPointRange();
-      // for(GA_Iterator it = range.begin(); it != range.end(); ++it) {
-      // 	for (uint i = 0; i < buffer_sizes[0]; ++i) {
-      // 	  ampli_attrib.set((*it), i, 0);
-      // 	}
-      // }
       ++w;
     }
   }
-  // std::cout<<"buffer size "<<buffer_sizes[w]<<" "<<w<<std::endl;
+
+  //create amplitude buffer attributes for the point sources and set them to zero  
   GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   if (!ampli_attrib.isValid()) {
     ampli_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
@@ -297,14 +285,11 @@ SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context)
     GA_Offset ptoff; 
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
       for (uint i = 0; i < buffer_size; ++i) {
-      ampli_attrib.set(ptoff, i, 0);
+	ampli_attrib.set(ptoff, i, 0);
       }
-      //      ampli_attrib.set(ptoff, 1, 0);
     }
   }
   gdp->bumpDataIdsForAddOrRemove(true, true, true);
-  // wl_attrib->bumpDataId();
-  // as_attrib->bumpDataId();
 
   return error();
 }

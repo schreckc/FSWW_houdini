@@ -23,7 +23,11 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
- * Wave_Source SOP
+ * Solve FS SOP
+ *----------------------------------------------------------------------------
+ * Compute amplitude of the obstacle sources (input 0) such that the boundary condition are
+ * respected (as well as possible, least square) at the boundary points (input 1) given the
+ * incoming waves (input 2).
  */
 
 
@@ -34,46 +38,34 @@
 #include "definitions.hpp"
 #include <Eigen/SVD>
 
-namespace HDK_Sample {
-
-/// Pure C++ implementation of @ref SOP_HOMWave
-/// @see SOP_HOMWave, vex_wave(), @ref HOM/SOP_HOMWave.py
 class SOP_Solve_FS : public SOP_Node
 {
 public:
-    SOP_Solve_FS(OP_Network *net, const char *name, OP_Operator *op);
-    virtual ~SOP_Solve_FS();
+  SOP_Solve_FS(OP_Network *net, const char *name, OP_Operator *op);
+  virtual ~SOP_Solve_FS();
 
-    static PRM_Template myTemplateList[];
-    static OP_Node *myConstructor(OP_Network*, const char *, OP_Operator *);
+  static PRM_Template myTemplateList[];
+  static OP_Node *myConstructor(OP_Network*, const char *, OP_Operator *);
 
   /// This method is created so that it can be called by handles.  It only
-    /// cooks the input group of this SOP.  The geometry in this group is
-    /// the only geometry manipulated by this SOP.
-    virtual OP_ERROR             cookInputGroups(OP_Context &context, 
-                                                int alone = 0);
+  /// cooks the input group of this SOP.  The geometry in this group is
+  /// the only geometry manipulated by this SOP.
+  virtual OP_ERROR             cookInputGroups(OP_Context &context, 
+					       int alone = 0);
 
 protected:
-    virtual OP_ERROR cookMySop(OP_Context &context);
+  virtual OP_ERROR cookMySop(OP_Context &context);
 private:
-    void        getGroups(UT_String &str){ evalString(str, "group", 0, 0); }
+  void        getGroups(UT_String &str){ evalString(str, "group", 0, 0); }
 
-    /// This is the group of geometry to be manipulated by this SOP and cooked
-    /// by the method "cookInputGroups".
-    const GA_PointGroup *myGroup;
+  /// This is the group of geometry to be manipulated by this SOP and cooked
+  /// by the method "cookInputGroups".
+  const GA_PointGroup *myGroup;
 
   int gdp_count;
   UT_Array<const GU_Detail*> myGDPLists;
   Eigen::BDCSVD<MatrixXcf> svd_T;
   
-  // struct variables_wl {
-  //   float wl;
-  //   int startoff, endoff;
-  //   Eigen::BDCSVD<MatrixXcf> svd_T;
-  //   VectorXcf p_in;
-  // }; //variables_wl
-  // UT_Array<variables_wl> list_wavelength;
 };
-} // End of HDK_Sample namespace
 
 #endif

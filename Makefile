@@ -3,13 +3,16 @@ HOUDINI_DIR=/opt/hfs17.0.459/
 SHELL := /bin/bash
 EIGEN=/usr/include/eigen3
 
-all: inter freq
+all: inter freq obstacles
 
 env:
 	pushd $(HOUDINI_DIR);source houdini_setup;popd
 
 inter: create_source solve_FS_inter deform_surface_inter
 freq: create_source solve_FS deform_surface
+
+obstacles: circle square texture
+
 
 create_source: $(SRC)SOP_Create_Source.cpp $(SRC)SOP_Create_Source.hpp $(SRC)definitions.hpp
 	hcustom $(SRC)SOP_Create_Source.cpp -I$(EIGEN) -g
@@ -31,6 +34,9 @@ texture: $(SRC)Grid.hpp  $(SRC)SOP_TextureObstacle_Src.cpp $(SRC)SOP_TextureObst
 
 circle: $(SRC)SOP_CircleObstacle_Src.cpp $(SRC)SOP_CircleObstacle_Src.hpp $(SRC)definitions.hpp
 	hcustom $(SRC)SOP_CircleObstacle_Src.cpp -I$(EIGEN) -g
+
+square: $(SRC)SOP_SquareObstacle_Src.cpp $(SRC)SOP_SquareObstacle_Src.hpp $(SRC)definitions.hpp
+	hcustom $(SRC)SOP_SquareObstacle_Src.cpp -I$(EIGEN) -g
 
 clean:
 	rm ($SRC)*.o

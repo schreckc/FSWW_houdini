@@ -24,6 +24,16 @@
  *
  *----------------------------------------------------------------------------
  * Create_Source SOP
+ *----------------------------------------------------------------------------
+ * create one source that can be used as input.
+ * Parameters:
+ *    -Position (X, Y, Z): position of the source (X, Z: coordintate on the water surface, Y=0)
+ *    -Amplitude
+ *    -Phase (not used yet)
+ *    -Minimum/maximum wavelength, wavelength multiplicative step: used to compute the range of wl
+ *    -Type (not used yet, keep at 0)
+ *    -Size of the buffer: size of the buffer recording past amplitude
+ *    -Damping
  */
 
 
@@ -32,27 +42,23 @@
 
 #include <SOP/SOP_Node.h>
 
-namespace HDK_Sample {
-
-/// Pure C++ implementation of @ref SOP_HOMWave
-/// @see SOP_HOMWave, vex_wave(), @ref HOM/SOP_HOMWave.py
 class SOP_Create_Source : public SOP_Node
 {
 public:
-    SOP_Create_Source(OP_Network *net, const char *name, OP_Operator *op);
-    virtual ~SOP_Create_Source();
+  SOP_Create_Source(OP_Network *net, const char *name, OP_Operator *op);
+  virtual ~SOP_Create_Source();
 
-    static PRM_Template myTemplateList[];
-    static OP_Node *myConstructor(OP_Network*, const char *, OP_Operator *);
+  static PRM_Template myTemplateList[];
+  static OP_Node *myConstructor(OP_Network*, const char *, OP_Operator *);
 
   /// This method is created so that it can be called by handles.  It only
-    /// cooks the input group of this SOP.  The geometry in this group is
-    /// the only geometry manipulated by this SOP.
-    virtual OP_ERROR             cookInputGroups(OP_Context &context, 
-                                                int alone = 0);
+  /// cooks the input group of this SOP.  The geometry in this group is
+  /// the only geometry manipulated by this SOP.
+  virtual OP_ERROR             cookInputGroups(OP_Context &context, 
+					       int alone = 0);
 
 protected:
-    virtual OP_ERROR cookMySop(OP_Context &context);
+  virtual OP_ERROR cookMySop(OP_Context &context);
 private:
   void        getGroups(UT_String &str){ evalString(str, "group", 0, 0); }
   fpreal      AMP(fpreal t)            { return evalFloat("amp", 0, t); }
@@ -67,13 +73,12 @@ private:
   fpreal      Y(fpreal t) { return evalFloat("pos", 1, t); }
   fpreal      Z(fpreal t) { return evalFloat("pos", 2, t); }
 
-    /// This is the group of geometry to be manipulated by this SOP and cooked
-    /// by the method "cookInputGroups".
-    const GA_PointGroup *myGroup;
+  /// This is the group of geometry to be manipulated by this SOP and cooked
+  /// by the method "cookInputGroups".
+  const GA_PointGroup *myGroup;
 
   int gdp_count;
   UT_Array<const GU_Detail*> myGDPLists;
 };
-} // End of HDK_Sample namespace
 
 #endif

@@ -23,10 +23,20 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------------
+ * Square Obstacle SOP
+ *---------------------------------------------------------------------------
+ * Create set of point sources along an offset surface of the obstacle.
+ * Range of wavelength (and time step per wl), and is copied from input geometry, as well as
+ *    the detail attibute.
+ * Create on primitve and subset of sources for each wl.
+ * Spacing depends on the wavelength and the parameter "density".
+ * I use this node also to create a set of point sampling the border of the obstacle (offset=0)
+ *    for the boundary conditions.
+ * Note: the density of the boundary points should be at least twice the density of the
+ *    sources.
+ * Note 2: for the aperiodic version, do not forget to check the "interactive sources" box in
+ *   the parameter of the node creating the sources of the obstacle.
  */
-
-/// This is the pure C++ implementation of the wave SOP.
-/// @see @ref HOM/SOP_HOMWave.py, @ref HOM/SOP_HOMWaveNumpy.py, @ref HOM/SOP_HOMWaveInlinecpp.py, @ref HOM/SOP_HOMWave.C, @ref SOP/SOP_VEXWave.vfl
 
 #include "SOP_SquareObstacle_Src.hpp"
 
@@ -43,10 +53,7 @@
 #include "definitions.hpp"
 #include <vector>
 
-using namespace HDK_Sample;
-
-void
-newSopOperator(OP_OperatorTable *table)
+void newSopOperator(OP_OperatorTable *table)
 {
   table->addOperator(new OP_Operator(
 				     "square_obstacle_src_fs",
@@ -134,13 +141,13 @@ SOP_Square_Obstacle_Src::cookInputGroups(OP_Context &context, int alone)
 OP_ERROR
 SOP_Square_Obstacle_Src::cookMySop(OP_Context &context)
 {
-  // Flag the SOP as being time dependent (i.e. cook on time changes)
+  // Flag the SOP as being time independent (i.e. cook on time changes)
   flags().timeDep = 0;
   float t = context.getTime();
 
-   OP_AutoLockInputs inputs(this);
-    if (inputs.lock(context) >= UT_ERROR_ABORT)
-        return error();
+  OP_AutoLockInputs inputs(this);
+  if (inputs.lock(context) >= UT_ERROR_ABORT)
+    return error();
   
   gdp->clearAndDestroy();
 
@@ -188,19 +195,16 @@ SOP_Square_Obstacle_Src::cookMySop(OP_Context &context)
     GA_Offset ptoff = gdp->appendPointBlock(2*nb_points_w + 2*nb_points_l);
     GA_Offset vtxoff;
     GA_Offset prim_off = gdp->appendPrimitivesAndVertices(GA_PRIMPOLY, 1, 2*nb_points_w + 2*nb_points_l, vtxoff, true);
-    //    std::cout<<"nb point l and w "<<nb_points_l<<" "<<nb_points_w<<std::endl;
     int i = 0;
     for (int c = 0; c < 4; ++c) {
       
       VEC3 dir = corners[(c+1)%4] - corners[c];
       float l = dir.norm();
       int nb_points = l*density + 1;
-      // std::cout<<"nb point C "<<nb_points<<" "<<c<<std::endl;
       float step = 1.0/(float)nb_points;
       float d = 0;
       for (int j = 0; j < nb_points;  ++i, ++j) {
 	VEC3 pos =  corners[c] + d*dir;
-	//std::cout<<"pos "<<pos(0)<<" "<<pos(1)<<" "<<pos(2)<<" "<<i<<std::endl;
 	gdp->getTopology().wireVertexPoint(vtxoff+i,ptoff+i);
 	gdp->setPos3(ptoff+i, UT_Vector3(pos(0), pos(1), pos(2)));
 	d += step; 
@@ -251,8 +255,6 @@ SOP_Square_Obstacle_Src::cookMySop(OP_Context &context)
     }
   }
   gdp->bumpDataIdsForAddOrRemove(true, true, true);
-  // wl_attrib->bumpDataId();
-  // as_attrib->bumpDataId();
 
   return error();
 }
