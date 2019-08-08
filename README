@@ -63,6 +63,8 @@ A set of sources is encoded as a geometry detail:
 
 Representation of the surface:
 We use a regular or projected grid, but any planar surface mesh should work.
+For the periodic method, each node of the grid store a spectrum (a complex amplitude for each 
+  wavelength).
 
 
 SOP_Create_Source:
