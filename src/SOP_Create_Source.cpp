@@ -258,7 +258,7 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
 
   // creation of the detail attibutes
   GA_RWHandleI bs_attrib(gdp->findIntTuple(GA_ATTRIB_DETAIL, "buffer_size", 1));
-  GA_RWHandleI damping_attrib(gdp->findIntTuple(GA_ATTRIB_DETAIL, "damping", 1));
+  GA_RWHandleF damping_attrib(gdp->findFloatTuple(GA_ATTRIB_DETAIL, "damping", 1));
   if (!bs_attrib.isValid()) {
     bs_attrib = GA_RWHandleI(gdp->addIntTuple(GA_ATTRIB_DETAIL, "buffer_size", 1));
   }
@@ -268,7 +268,7 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
   }
   bs_attrib.set(0,buffer_size);
   if (!damping_attrib.isValid()) {
-    damping_attrib = GA_RWHandleI(gdp->addIntTuple(GA_ATTRIB_DETAIL, "damping", 1));
+    damping_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_DETAIL, "damping", 1));
   }
   if (!damping_attrib.isValid()) {
     addError(SOP_MESSAGE, "Failed to create attribute damping");

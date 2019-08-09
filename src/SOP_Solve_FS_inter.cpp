@@ -145,6 +145,8 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
     buffer_size = bs_handle.get(0);
     damping_coef = damping_handle.get(0);
 
+   
+
     // create transfer matrix
     for (int w = 0; w < nb_wl; ++w) {
       float wl = wave_lengths[w];
@@ -168,7 +170,7 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
 	  float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
 	  float ret = r/v;
 	  float q = interpolation(ret, 0, dt*as);
-	  if (q > 0) {
+	  if (q > 0 && r != 0) {
 	    q = 1;
 	    T(i, j) = q*fund_solution(k*r);
 	    ++nb_bp;
@@ -182,6 +184,16 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       }
       svd[w] =  BDCSVD<MatrixXcf>(T,ComputeThinU | ComputeThinV);
     }
+  }
+
+  GA_ROHandleI bs_es_handle(gdp->findAttribute(GA_ATTRIB_DETAIL, "buffer_size"));
+  if (!bs_es_handle.isValid()) {
+    addError(SOP_ATTRIBUTE_INVALID, "buffer sizes obsacle sources");
+    return error();
+  }
+  if (bs_es_handle.get(0) != buffer_size) {
+    addError(SOP_ATTRIBUTE_INVALID, "Buffer size of obstacle sources do not match buffer size of input sources. Did you forget to check the interactive sources box ?");
+    return error();
   }
 
   const GA_Attribute *afs;
@@ -275,6 +287,9 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       c = svd[w].solve(p_in[w]);
       int i = 0;
       for(GA_Iterator it = range.begin(); it != range.end(); ++it, ++i) {
+	// if (real(c[i]) != 0 || imag(c[i]) != 0) {
+	//   std::cout<<"ampli c[i] "<<c[i]<<std::endl;
+	//   }
 	ampli_attrib.set(*it, 2*(fr/as), real(c[i]));
 	ampli_attrib.set(*it, 2*(fr/as)+1, imag(c[i]));
       }

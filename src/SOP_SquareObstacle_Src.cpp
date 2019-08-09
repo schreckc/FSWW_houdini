@@ -68,6 +68,7 @@ static PRM_Name names[] = {
   PRM_Name("density",   "Density"),
   PRM_Name("length",   "Length"),
   PRM_Name("width",   "Width"),
+  PRM_Name("inter_src",   "Interactive sources"),
 };
 
 PRM_Default* off_default = new PRM_Default(0.3);
@@ -82,6 +83,7 @@ SOP_Square_Obstacle_Src::myTemplateList[] = {
   PRM_Template(PRM_FLT_J,     1, &names[2], dens_default),
   PRM_Template(PRM_FLT_J,     1, &names[3], PRMoneDefaults),
   PRM_Template(PRM_FLT_J,     1, &names[4], PRMoneDefaults),
+  PRM_Template(PRM_TOGGLE_J,    1, &names[5]),
   PRM_Template(),
 };
 
@@ -117,7 +119,8 @@ OP_ERROR SOP_Square_Obstacle_Src::cookMySop(OP_Context &context)
 {
   flags().timeDep = 0;
   float t = context.getTime();
-
+  bool is_inter = INTER_SRC(t);
+  
   OP_AutoLockInputs inputs(this);
   if (inputs.lock(context) >= UT_ERROR_ABORT)
     return error();
@@ -140,6 +143,22 @@ OP_ERROR SOP_Square_Obstacle_Src::cookMySop(OP_Context &context)
     addError(SOP_ATTRIBUTE_INVALID, "amplis_steps input sources");
     return error();
   }
+
+  GA_ROHandleI bs_handle(is->findAttribute(GA_ATTRIB_DETAIL, "buffer_size"));
+  GA_ROHandleF damping_handle(is->findAttribute(GA_ATTRIB_DETAIL, "damping"));
+  if (!bs_handle.isValid()) {
+    addError(SOP_ATTRIBUTE_INVALID, "buffer sizes input sources");
+    return error();
+  }
+  if (!damping_handle.isValid()) {
+    addError(SOP_ATTRIBUTE_INVALID, "damping input sources");
+    return error();
+  }
+  int buffer_size = 2;
+  if (is_inter) {
+    buffer_size= bs_handle.get(0);
+  }
+  float damping = damping_handle.get(0);
   
   int w = 0;
   GA_Range range_is = is->getPrimitiveRange();
@@ -150,6 +169,7 @@ OP_ERROR SOP_Square_Obstacle_Src::cookMySop(OP_Context &context)
     ampli_steps[w]= as_handle.get(prim_off);
   }
 
+  //create set of points for each wavelength, and liked them to their corresponding primitve
   for (int w = 0; w < nb_wl; ++w) {
     float wl = wave_lengths[w];
     float density = DENSITY(t)/wl;
@@ -185,9 +205,12 @@ OP_ERROR SOP_Square_Obstacle_Src::cookMySop(OP_Context &context)
     }
 
   }
-
+  
+  // create and set attibutes for primitves and detail
   GA_RWHandleF wl_attrib(gdp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "wavelengths", 1));
   GA_RWHandleF as_attrib(gdp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "ampli_steps", 1));
+  GA_RWHandleF bs_attrib(gdp->findFloatTuple(GA_ATTRIB_DETAIL, "buffer_size", 1));
+  GA_RWHandleF damping_attrib(gdp->findFloatTuple(GA_ATTRIB_DETAIL, "damping", 1));
   if (!wl_attrib.isValid()) {
     wl_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_PRIMITIVE, "wavelengths", 1));
   }
@@ -202,6 +225,23 @@ OP_ERROR SOP_Square_Obstacle_Src::cookMySop(OP_Context &context)
     addError(SOP_MESSAGE, "Failed to create attribute ampli_steps");
     return error();
   }
+  if (!bs_attrib.isValid()) {
+    bs_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_DETAIL, "buffer_size", 1));
+  }
+  if (!bs_attrib.isValid()) {
+    addError(SOP_MESSAGE, "Failed to create attribute buffer_size");
+    return error();
+  }
+  if (!damping_attrib.isValid()) {
+    damping_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_DETAIL, "damping", 1));
+  }
+  if (!damping_attrib.isValid()) {
+    addError(SOP_MESSAGE, "Failed to create attribute damping");
+    return error();
+  }
+
+  bs_attrib.set(0, buffer_size);
+  damping_attrib.set(0, damping);
 
   w = 0;
   GA_Offset prim_off, lcl_start, lcl_end;
@@ -212,9 +252,11 @@ OP_ERROR SOP_Square_Obstacle_Src::cookMySop(OP_Context &context)
       ++w;
     }
   }
-  GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2));
+
+  //create amplitude buffer attributes for the point sources and set them to zero  
+  GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   if (!ampli_attrib.isValid()) {
-    ampli_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli", 2));
+    ampli_attrib = GA_RWHandleF(gdp->addFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   }
   if (!ampli_attrib.isValid()) {
     addError(SOP_MESSAGE, "Failed to create attribute ampli");
@@ -223,8 +265,9 @@ OP_ERROR SOP_Square_Obstacle_Src::cookMySop(OP_Context &context)
   {
     GA_Offset ptoff; 
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
-      ampli_attrib.set(ptoff, 0, 0);
-      ampli_attrib.set(ptoff, 1, 0);
+      for (uint i = 0; i < buffer_size; ++i) {
+	ampli_attrib.set(ptoff, i, 0);
+      }
     }
   }
   gdp->bumpDataIdsForAddOrRemove(true, true, true);

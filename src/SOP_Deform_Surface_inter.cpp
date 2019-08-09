@@ -193,6 +193,7 @@ OP_ERROR SOP_Deform_Surface_inter::cookMySop(OP_Context &context) {
 	      tuple->get(afs, *it, ai, 2*f_ret+1);
 	    }
 	    std::complex<float> ampli(ar, ai);
+	    //std::cout<<"damping_coef "<<damping_coef<<"  damping "<<damping(damping_coef, r, k)<<std::endl;
 	    a += ampli*fund_solution(k*r)*damping(damping_coef, r, k);
 	  }
 	  Pvalue.y() += real(amp*a*exp(-COMPLEX(0, 1)*(om*(float)t)));

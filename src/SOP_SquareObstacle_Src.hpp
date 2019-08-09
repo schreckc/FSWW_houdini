@@ -66,6 +66,7 @@ private:
   fpreal      CX(fpreal t) { return evalFloat("center", 0, t); }
   fpreal      CY(fpreal t) { return evalFloat("center", 1, t); }
   fpreal      CZ(fpreal t) { return evalFloat("center", 2, t); }
+  int        INTER_SRC(fpreal t) {return evalInt("inter_src", 0, t);}
   const GA_PointGroup *myGroup;
   
 };
