@@ -17,6 +17,9 @@ obstacles: circle square texture
 create_source: $(SRC)SOP_Create_Source.cpp $(SRC)SOP_Create_Source.hpp $(SRC)definitions.hpp
 	hcustom $(SRC)SOP_Create_Source.cpp -I$(EIGEN) -g
 
+create_sources: $(SRC)SOP_Create_Sources.cpp $(SRC)SOP_Create_Sources.hpp $(SRC)definitions.hpp
+	hcustom $(SRC)SOP_Create_Sources.cpp -I$(EIGEN) -g
+
 solve_FS_inter: $(SRC)SOP_Solve_FS_inter.cpp $(SRC)SOP_Solve_FS_inter.hpp $(SRC)definitions.hpp
 	hcustom $(SRC)SOP_Solve_FS_inter.cpp -I$(EIGEN) -g
 
