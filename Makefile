@@ -38,5 +38,8 @@ circle: $(SRC)SOP_CircleObstacle_Src.cpp $(SRC)SOP_CircleObstacle_Src.hpp $(SRC)
 square: $(SRC)SOP_SquareObstacle_Src.cpp $(SRC)SOP_SquareObstacle_Src.hpp $(SRC)definitions.hpp
 	hcustom $(SRC)SOP_SquareObstacle_Src.cpp -I$(EIGEN) -g
 
+merge: $(SRC)SOP_Merge_Sources.cpp $(SRC)SOP_Merge_Sources.hpp $(SRC)definitions.hpp
+	hcustom $(SRC)SOP_Merge_Sources.cpp -I$(EIGEN) -g
+
 clean:
 	rm ($SRC)*.o

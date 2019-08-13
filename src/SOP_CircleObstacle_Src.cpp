@@ -83,7 +83,7 @@ SOP_Circle_Obstacle_Src::myTemplateList[] = {
   PRM_Template(PRM_FLT_J,     1, &names[1], off_default),
   PRM_Template(PRM_FLT_J,     1, &names[2], dens_default),
   PRM_Template(PRM_FLT_J,     1, &names[3], PRMoneDefaults),
-  PRM_Template(PRM_TOGGLE_J,    1, &names[4]),
+  PRM_Template(PRM_TOGGLE_J,  1, &names[4]),
   PRM_Template(),
 };
 

@@ -71,6 +71,7 @@ static PRM_Name names[] = {
   PRM_Name("type",   "Type (point or line)"),
   PRM_Name("buffer_size",   "Size of the buffer containing past amplitudes"),
   PRM_Name("damping",   "Damping"),
+  PRM_Name("inter_src",   "Interactive sources"),
 };
 
 PRM_Template
@@ -88,6 +89,7 @@ SOP_Create_Source::myTemplateList[] = {
   PRM_Template(PRM_INT_J,     1, &names[6], PRMzeroDefaults),
   PRM_Template(PRM_INT_J,     1, &names[7], new PRM_Default(500)),
   PRM_Template(PRM_FLT_J,     1, &names[8], PRMzeroDefaults),
+  PRM_Template(PRM_TOGGLE_J,  1, &names[9]),
   PRM_Template(),
 };
 
@@ -134,8 +136,11 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
   // }
   float phase = PHASE(t);
   float amp = AMP(t);
-  uint buffer_size = BUFFER_SIZE(0);
-  
+  bool is_inter = INTER_SRC(t);
+  uint buffer_size = 2;
+  if (is_inter) {
+    buffer_size = BUFFER_SIZE(0);
+  }
   std::vector<float> wave_lengths;
 
   // Compute the range of wavelength we want to use between WL_MIN and WL_MAX(t)

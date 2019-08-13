@@ -42,6 +42,9 @@ Implementation
 If you want to understand or modify the code, first thing to do is to read the article.
 Here are the details specific to the houdini implementation.
 
+NOTE: the houdini name of any the node created by this code contains "FS" so you can find them
+  more easily in Houdini.
+
 A set of sources is encoded as a geometry detail:
   * Detail:
       -Attibutes:
@@ -102,3 +105,8 @@ Compute amplitude of the obstacle sources (input 0) such that the boundary condi
 SOP_Deform_Surface/SOP_Deform_Surface_inter:
 Compute height at each point of the grid (input 0) by summing all the sources.
 (each other input is a set of sources)
+
+SOP_Merge_Sources:
+Take any number (at least one) of set of sources and merge them together.
+For now, we assume tht all the sets have the same parameter (range of wavelength, 
+  buffer_size etc...).
