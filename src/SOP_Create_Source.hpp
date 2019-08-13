@@ -28,7 +28,7 @@
  * Parameters:
  *    -Position (X, Y, Z): position of the source (X, Z: coordintate on the water surface, Y=0)
  *    -Amplitude
- *    -Phase (not used yet)
+ *    -Phase
  *    -Minimum/maximum wavelength, wavelength multiplicative step: used to compute the range of wl
  *    -Type (not used yet, keep at 0)
  *    -Size of the buffer: size of the buffer recording past amplitude

@@ -28,7 +28,7 @@
  * Parameters:
  *    -Position (X, Y, Z): position of the source (X, Z: coordintate on the water surface, Y=0)
  *    -Amplitude
- *    -Phase (not used yet)
+ *    -Phase
  *    -Minimum/maximum wavelength, wavelength multiplicative step: used to compute the range of wl
  *    -Type (not used yet, keep at 0)
  *    -Size of the buffer: size of the buffer recording past amplitude
@@ -135,7 +135,7 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
   //   dt_ = t/fr;
   // }
   float phase = PHASE(t);
-  float amp = AMP(t);
+  COMPLEX amp = (float)AMP(t)*exp(COMPLEX(0,1)*phase);
   bool is_inter = INTER_SRC(t);
   uint buffer_size = 2;
   if (is_inter) {
@@ -201,6 +201,7 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
     }
   }
 
+
   //create amplitude buffer for each source and fill it
   GA_RWHandleF ampli_attrib(gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   if (!ampli_attrib.isValid()) {
@@ -214,8 +215,8 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
   if (buffer_size > 100) {
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
       for (uint i = 0; i < 100; i+=2) {
-	ampli_attrib.set(ptoff, i, amp);
-	ampli_attrib.set(ptoff, i+1, 0);
+	ampli_attrib.set(ptoff, i, real(amp));
+	ampli_attrib.set(ptoff, i+1, imag(amp));
       }
       for (uint i = 100; i < buffer_size; i+=2) {
 	ampli_attrib.set(ptoff, i, 0);
@@ -225,8 +226,8 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
   } else {
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
       for (uint i = 0; i < buffer_size; i+=2) {
-	ampli_attrib.set(ptoff, i, amp);
-	ampli_attrib.set(ptoff, i+1, 0);
+	ampli_attrib.set(ptoff, i, real(amp));
+	ampli_attrib.set(ptoff, i+1, imag(amp));
       }
     
     }

@@ -27,7 +27,7 @@
  * create a set of sources from an input set of points that can be used as input.
  * Parameters:
  *    -Amplitude
- *    -Phase (not used yet)
+ *    -Phase
  *    -Minimum/maximum wavelength, wavelength multiplicative step: used to compute the range of wl
  *    -Type (not used yet, keep at 0)
  *    -Size of the buffer: size of the buffer recording past amplitude

@@ -132,7 +132,7 @@ OP_ERROR SOP_Create_Sources::cookMySop(OP_Context &context) {
   //   dt_ = t/fr;
   // }
   float phase = PHASE(t);
-  float amp = AMP(t);
+  COMPLEX amp = (float)AMP(t)*exp(COMPLEX(0,1)*phase);
   bool is_inter = INTER_SRC(t);
   uint buffer_size = 2;
   if (is_inter) {
@@ -212,8 +212,8 @@ OP_ERROR SOP_Create_Sources::cookMySop(OP_Context &context) {
   if (buffer_size > 100) {
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
       for (uint i = 0; i < 100; i+=2) {
-	ampli_attrib.set(ptoff, i, amp);
-	ampli_attrib.set(ptoff, i+1, 0);
+	ampli_attrib.set(ptoff, i, real(amp));
+	ampli_attrib.set(ptoff, i+1, imag(amp));
       }
       for (uint i = 100; i < buffer_size; i+=2) {
 	ampli_attrib.set(ptoff, i, 0);
@@ -223,8 +223,8 @@ OP_ERROR SOP_Create_Sources::cookMySop(OP_Context &context) {
   } else {
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
       for (uint i = 0; i < buffer_size; i+=2) {
-	ampli_attrib.set(ptoff, i, amp);
-	ampli_attrib.set(ptoff, i+1, 0);
+	ampli_attrib.set(ptoff, i, real(amp));
+	ampli_attrib.set(ptoff, i+1, imag(amp));
       }
     
     }

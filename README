@@ -70,16 +70,17 @@ For the periodic method, each node of the grid store a spectrum (a complex ampli
   wavelength).
 
 
-SOP_Create_Source:
-create one source that can be used as input.
+SOP_Create_Source/SOP_Create_Sources:
+create one source/a set of sources (from a set of point) that can be used as input.
   Parameters:
      -Position (X, Y, Z): position of the source (X, Z: coordintate on the water surface, Y=0)
      -Amplitude
-     -Phase (not used yet)
+     -Phase
      -Minimum/maximum wavelength, wavelength multiplicative step: used to compute the range of wl
      -Type (not used yet, keep at 0)
      -Size of the buffer: size of the buffer recording past amplitude
      -Damping
+
 
 
 SOP_Circle/Square/TextureObstacle:
