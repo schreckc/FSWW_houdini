@@ -199,6 +199,29 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
   const GA_Attribute *afs;
   const GA_AIFTuple *tuple; 
   // fill the p_in for each wavelength
+
+  // add contribution from the spectrum computed at bp
+  GA_ROHandleI ws_attrib(bp->findIntTuple(GA_ATTRIB_DETAIL, "winsize", 1));
+  GA_ROHandleF spectrum_attrib;
+  int winsize = 0;
+  if (ws_attrib.isValid()) {
+    winsize = ws_attrib.get(0);
+    assert(nb_wl == winsize);
+    spectrum_attrib = GA_ROHandleF(bp->findFloatTuple(GA_ATTRIB_POINT, "spectrum", winsize));
+      if (!spectrum_attrib.isValid()) {
+      addError(SOP_MESSAGE, "Cannot find attribute spectrum");
+      return error();
+    }
+    // GA_Range range_bp = prim_bp->getPointRange();
+    // int i = 0;
+    // for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp, ++i) {
+    //   for (int w = 0; w < nb_wl; ++w) {
+    // 	float a = spectrum_attrib.get(*itbp, w);
+    // 	p_in[w] += a;
+    //   }
+    // }
+  }
+  
   GA_ROHandleF a_handle(is->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
   for (int w = 0; w < nb_wl; ++w) {
     int as = ampli_steps[w];
@@ -214,6 +237,11 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
 	UT_Vector3 pos_b = bp->getPos3(*itbp);
 	p_in[w](i) = 0;
+	if (ws_attrib.isValid()) {
+	  float ar = spectrum_attrib.get(*itbp, 2*w);
+	  float ai = spectrum_attrib.get(*itbp, 2*w+1);
+	  p_in[w](i) += COMPLEX(ar, ai);
+	}
 	// add contribution from input sources
 	const GA_Primitive* prim_is = is->getPrimitiveByIndex(w);
 	GA_Range range_is = prim_is->getPointRange();
@@ -234,6 +262,8 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       	  std::complex<float> ampli(ar, ai);
       	  p_in[w](i) -= ampli*fund_solution(k*r)*damping(damping_coef, r, k);
 	}
+
+	  
 	// add contribution from other sources of the obstacle
 	const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
 	GA_Range range = prim->getPointRange();

@@ -138,12 +138,48 @@ OP_ERROR SOP_Create_Sources::cookMySop(OP_Context &context) {
   if (is_inter) {
     buffer_size = BUFFER_SIZE(0);
   }
-  std::vector<float> wave_lengths(0);
+  std::vector<float> wave_lengths;
+  std::vector<int> ampli_steps;
+  int nb_wl = 1;
+  
+  OP_AutoLockInputs inputs(this);
+  if (inputs.lock(context) >= UT_ERROR_ABORT)
+    return error();
+  
+  int nb_inputs = getInputsArraySize();
+  if (nb_inputs == 2) {
+    const GU_Detail *bp = inputGeo(1);
+    const GA_ROHandleI ws_attrib(bp->findIntTuple(GA_ATTRIB_DETAIL, "winsize", 1));
+    if (!ws_attrib.isValid()) {
+      addError(SOP_ATTRIBUTE_INVALID, "winsize");
+      return error();
+    }
+    int winsize = ws_attrib.get(0);
+    nb_wl = winsize/2;
+    wave_lengths = std::vector<float>(winsize);
+    ampli_steps = std::vector<int>(winsize);
+    const GA_ROHandleF wl_attrib(bp->findFloatTuple(GA_ATTRIB_DETAIL, "wavelengths", winsize/2));
+    if (!wl_attrib.isValid()) {
+      addError(SOP_MESSAGE, "Cannot find attribute wavelengths");
+      return error();
+    }
+    const GA_ROHandleF as_attrib(bp->findFloatTuple(GA_ATTRIB_DETAIL, "ampli_steps", winsize/2));
+    if (!as_attrib.isValid()) {
+      addError(SOP_MESSAGE, "Cannot find attribute ampli_steps");
+      return error();
+    }
+    for (uint w = 0; w < nb_wl; ++w) {
+      wave_lengths[w] = wl_attrib.get(0, w);
+      ampli_steps[w] = as_attrib.get(0, w);
+    }
+    
+  } else {
+    //  std::vector<float> wave_lengths(0);
 
   // Compute the range of wavelength we want to use between WL_MIN and WL_MAX(t)
   // Note: multiplicative step between wl
   FLOAT wl = WL_MIN(0);
-  int nb_wl = 1;
+ 
   wave_lengths.push_back(wl);
 
   float max_wl = WL_MAX(t);
@@ -153,10 +189,9 @@ OP_ERROR SOP_Create_Sources::cookMySop(OP_Context &context) {
     wave_lengths.push_back(wl);
     ++nb_wl;
   }
-  
-  
+    
   // compute the number of time step between updates for each wavelength
-  std::vector<int> ampli_steps(nb_wl);
+   ampli_steps = std::vector<int>(nb_wl);
   wl = wave_lengths[0];
   FLOAT period = 0.25*wl/velocity(2*M_PI/wl);
   int d_period = period/(dt_);
@@ -176,10 +211,8 @@ OP_ERROR SOP_Create_Sources::cookMySop(OP_Context &context) {
       ampli_steps[w] = d_period*ampli_steps[0];
     }
   }
+  }
 
-    OP_AutoLockInputs inputs(this);
-  if (inputs.lock(context) >= UT_ERROR_ABORT)
-    return error();
   // begin creation of geometry
   gdp->clearAndDestroy();
   const GU_Detail *fs = inputGeo(0);

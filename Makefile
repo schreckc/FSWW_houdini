@@ -11,6 +11,9 @@ env:
 inter: create_source solve_FS_inter deform_surface_inter
 freq: create_source solve_FS deform_surface
 
+test_spec: $(SRC)main.cpp $(SRC)definitions.hpp $(SRC)FFT.hpp
+	gcc src/main.cpp -I/usr/include/eigen3 -std=c++11 -g -o test
+
 obstacles: circle square texture
 
 
@@ -43,6 +46,9 @@ square: $(SRC)SOP_SquareObstacle_Src.cpp $(SRC)SOP_SquareObstacle_Src.hpp $(SRC)
 
 merge: $(SRC)SOP_Merge_Sources.cpp $(SRC)SOP_Merge_Sources.hpp $(SRC)definitions.hpp
 	hcustom $(SRC)SOP_Merge_Sources.cpp -I$(EIGEN) -g
+
+boundary_points: $(SRC)SOP_Boundary_Points.cpp $(SRC)SOP_Boundary_Points.hpp $(SRC)InputPoint.hpp $(SRC)FFT.hpp $(SRC)definitions.hpp
+	hcustom $(SRC)SOP_Boundary_Points.cpp -I$(EIGEN) -g
 
 clean:
 	rm ($SRC)*.o

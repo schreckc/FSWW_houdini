@@ -60,7 +60,7 @@ void newSopOperator(OP_OperatorTable *table) {
 				     SOP_Circle_Obstacle_Src::myConstructor,
 				     SOP_Circle_Obstacle_Src::myTemplateList,
 				     1,
-				     1,
+				     2,
 				     nullptr,  
 				     OP_FLAG_GENERATOR));
 }
@@ -129,22 +129,61 @@ OP_ERROR SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context) {
 
   // get details and primitives attibutes from the input sources
   const GU_Detail *is = inputGeo(0); //input sources
-  int nb_wl = is->getPrimitiveRange().getEntries();
-    
-  std::vector<float> wave_lengths(nb_wl);
-  std::vector<int> ampli_steps(nb_wl);
 
-  GA_ROHandleF w_handle(is->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
-  GA_ROHandleF as_handle(is->findAttribute(GA_ATTRIB_PRIMITIVE, "ampli_steps"));
-  if (!w_handle.isValid()) {
-    addError(SOP_ATTRIBUTE_INVALID, "wavelengths input sources");
-    return error();
+  int nb_inputs = getInputsArraySize();
+  int nb_wl = 0;
+  std::vector<float> wave_lengths;
+  std::vector<int> ampli_steps;
+  if (nb_inputs == 2) {
+     const GU_Detail *bp = inputGeo(1);
+    const GA_ROHandleI ws_attrib(bp->findIntTuple(GA_ATTRIB_DETAIL, "winsize", 1));
+    if (!ws_attrib.isValid()) {
+      addError(SOP_ATTRIBUTE_INVALID, "winsize");
+      return error();
+    }
+    int winsize = ws_attrib.get(0);
+    nb_wl = winsize/2;
+    wave_lengths = std::vector<float>(winsize);
+    ampli_steps = std::vector<int>(winsize);
+    const GA_ROHandleF wl_attrib(bp->findFloatTuple(GA_ATTRIB_DETAIL, "wavelengths", winsize/2));
+    if (!wl_attrib.isValid()) {
+      addError(SOP_MESSAGE, "Cannot find attribute wavelengths");
+      return error();
+    }
+    const GA_ROHandleF as_attrib(bp->findFloatTuple(GA_ATTRIB_DETAIL, "ampli_steps", winsize/2));
+    if (!as_attrib.isValid()) {
+      addError(SOP_MESSAGE, "Cannot find attribute ampli_steps");
+      return error();
+    }
+    for (uint w = 0; w < nb_wl; ++w) {
+      wave_lengths[w] = wl_attrib.get(0, w);
+      ampli_steps[w] = as_attrib.get(0, w);
+    }
+  } else {
+    nb_wl = is->getPrimitiveRange().getEntries();
+    wave_lengths = std::vector<float>(nb_wl);
+    ampli_steps = std::vector<int>(nb_wl);
+    GA_ROHandleF w_handle(is->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
+    GA_ROHandleF as_handle(is->findAttribute(GA_ATTRIB_PRIMITIVE, "ampli_steps"));
+    if (!w_handle.isValid()) {
+      addError(SOP_ATTRIBUTE_INVALID, "wavelengths input sources");
+      return error();
+    }
+    if (!as_handle.isValid()) {
+      addError(SOP_ATTRIBUTE_INVALID, "amplis_steps input sources");
+      return error();
+    }
+     int w = 0;
+     GA_Range range_is = is->getPrimitiveRange();
+     for(GA_Iterator itis = range_is.begin(); itis != range_is.end(); ++itis, ++w) {
+       GA_Offset prim_off = *itis;
+       float wl = w_handle.get(prim_off);
+       wave_lengths[w] = wl;
+       ampli_steps[w]= as_handle.get(prim_off);
+     }
   }
-  if (!as_handle.isValid()) {
-    addError(SOP_ATTRIBUTE_INVALID, "amplis_steps input sources");
-    return error();
-  }
-  
+
+    
   GA_ROHandleI bs_handle(is->findAttribute(GA_ATTRIB_DETAIL, "buffer_size"));
   GA_ROHandleF damping_handle(is->findAttribute(GA_ATTRIB_DETAIL, "damping"));
   if (!bs_handle.isValid()) {
@@ -161,14 +200,7 @@ OP_ERROR SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context) {
   }
   float damping = damping_handle.get(0);
    
-  int w = 0;
-  GA_Range range_is = is->getPrimitiveRange();
-  for(GA_Iterator itis = range_is.begin(); itis != range_is.end(); ++itis, ++w) {
-    GA_Offset prim_off = *itis;
-    float wl = w_handle.get(prim_off);
-    wave_lengths[w] = wl;
-    ampli_steps[w]= as_handle.get(prim_off);
-  }
+ 
 
   //create set of points for each wavelength, and liked them to their corresponding primitve
   for (int w = 0; w < nb_wl; ++w) {
@@ -237,7 +269,7 @@ OP_ERROR SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context) {
   bs_attrib.set(0, buffer_size);
   damping_attrib.set(0, damping);
   
-  w = 0;
+  int w = 0;
   GA_Offset prim_off, lcl_start, lcl_end;
   for (GA_Iterator lcl_it((gdp)->getPrimitiveRange()); lcl_it.blockAdvance(lcl_start, lcl_end); ) {
     for (prim_off = lcl_start; prim_off < lcl_end; ++prim_off) {
