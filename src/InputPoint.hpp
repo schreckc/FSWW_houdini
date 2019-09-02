@@ -72,7 +72,10 @@ public:
     }
     spectrum_re = new FLOAT[nb_frequencies];
     spectrum_im = new FLOAT[nb_frequencies];
-
+    for (uint i = 0; i < nb_frequencies; ++i) {
+      spectrum_re[i] = 0;
+      spectrum_im[i] = 0;
+    }
     t = 0;
     name = "test";
   }
@@ -114,12 +117,12 @@ public:
       t = 0;
     }
     ++t;
-    //  std::cout<<next_sample<<std::endl;   
+    //   std::cout<<next_sample<<std::endl;   
     
   }
   
   void computeSpectrum()  {
-    //  std::cout<<"compute spectrum "<<spectrogram.size() <<std::endl;
+    // std::cout<<"compute spectrum "<<spectrogram.size() <<std::endl;
     FLOAT *in_re = new FLOAT[window_size];
     FLOAT *in_im = new FLOAT[window_size];
 
@@ -141,6 +144,7 @@ public:
     
       FLOAT e_db = - 10*log10(e+epsilon_db);
       power_spectrum[i] = e;
+      // std::cout<<"s "<<i<<" "<<spectrum_re[i]<<" "<<spectrum_im[i]<<std::endl;
       // spectrum_re[i] = in_re[i];
       // spectrum_im[i] = 0;
     }
@@ -152,6 +156,7 @@ public:
       //    exit(0);
       spectrogram.pop_front();
     }
+  
     delete[] in_re;
     delete[] in_im;
   }
@@ -166,7 +171,7 @@ public:
     std::stringstream ss;
     ss <<name<<"_spectrum.txt";
     std::string str(ss.str());
-    std::cout<<str<<std::endl;
+    // std::cout<<str<<std::endl;
     std::ofstream  out_file;
     out_file.open(str.c_str());
 
@@ -216,7 +221,15 @@ public:
   void move(VEC2 trans) {
     pos += trans;
   }
+
+  std::ofstream & record_samples(std::ofstream & file) {
+    file << samples.back() <<" ";
+    return file;
+  }
+
 };
+
+
 
 #endif
 

@@ -103,7 +103,7 @@ OP_ERROR SOP_Deform_Surface_inter::cookMySop(OP_Context &context) {
   flags().timeDep = 1;
   float t = context.getTime();
   int fr = context.getFrame();
-  float dt = 0.1;
+  float dt = 0.1/3.0;
   t = dt*fr;
 
   float amp = AMP(t);
@@ -126,7 +126,7 @@ OP_ERROR SOP_Deform_Surface_inter::cookMySop(OP_Context &context) {
     GA_ROHandleF w_handle(fs->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
     GA_ROHandleI as_handle(fs->findAttribute(GA_ATTRIB_PRIMITIVE, "ampli_steps"));
     if (!w_handle.isValid()) {
-      addError(SOP_ATTRIBUTE_INVALID, "wavelengths");
+      addError(SOP_ATTRIBUTE_INVALID, "wavelengths...");
       return error();
     }
     if (!as_handle.isValid()) {

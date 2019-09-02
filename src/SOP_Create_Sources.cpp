@@ -127,7 +127,7 @@ OP_ERROR SOP_Create_Sources::cookMySop(OP_Context &context) {
   int fr = context.getFrame();
   
   // TODO: user def time step
-  float dt_ = 0.1;
+  float dt_ = 0.1/3.0;
   // if (fr != 0) {
   //   dt_ = t/fr;
   // }
@@ -149,28 +149,30 @@ OP_ERROR SOP_Create_Sources::cookMySop(OP_Context &context) {
   int nb_inputs = getInputsArraySize();
   if (nb_inputs == 2) {
     const GU_Detail *bp = inputGeo(1);
-    const GA_ROHandleI ws_attrib(bp->findIntTuple(GA_ATTRIB_DETAIL, "winsize", 1));
-    if (!ws_attrib.isValid()) {
-      addError(SOP_ATTRIBUTE_INVALID, "winsize");
-      return error();
-    }
-    int winsize = ws_attrib.get(0);
-    nb_wl = winsize/2;
-    wave_lengths = std::vector<float>(winsize);
-    ampli_steps = std::vector<int>(winsize);
-    const GA_ROHandleF wl_attrib(bp->findFloatTuple(GA_ATTRIB_DETAIL, "wavelengths", winsize/2));
+    // const GA_ROHandleI ws_attrib(bp->findIntTuple(GA_ATTRIB_DETAIL, "winsize", 1));
+    // if (!ws_attrib.isValid()) {
+    //   addError(SOP_ATTRIBUTE_INVALID, "winsize");
+    //   return error();
+    // }
+    nb_wl =  bp->getPrimitiveRange().getEntries();
+    //    nb_wl = winsize;
+    wave_lengths = std::vector<float>(nb_wl);
+    ampli_steps = std::vector<int>(nb_wl);
+    const GA_ROHandleF wl_attrib(bp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "wavelength", 1));
     if (!wl_attrib.isValid()) {
-      addError(SOP_MESSAGE, "Cannot find attribute wavelengths");
+      addError(SOP_MESSAGE, "Cannot find attribute wavelength");
       return error();
     }
-    const GA_ROHandleF as_attrib(bp->findFloatTuple(GA_ATTRIB_DETAIL, "ampli_steps", winsize/2));
+    const GA_ROHandleI as_attrib(bp->findIntTuple(GA_ATTRIB_PRIMITIVE, "ampli_step", 1));
     if (!as_attrib.isValid()) {
-      addError(SOP_MESSAGE, "Cannot find attribute ampli_steps");
+      addError(SOP_MESSAGE, "Cannot find attribute ampli_step");
       return error();
     }
-    for (uint w = 0; w < nb_wl; ++w) {
-      wave_lengths[w] = wl_attrib.get(0, w);
-      ampli_steps[w] = as_attrib.get(0, w);
+    uint w = 0;
+    GA_Range range_prim = bp->getPrimitiveRange();
+    for(GA_Iterator itp = range_prim.begin(); itp != range_prim.end(); ++itp, ++w) {
+      wave_lengths[w] = wl_attrib.get(*itp);
+      ampli_steps[w] = as_attrib.get(*itp);
     }
     
   } else {

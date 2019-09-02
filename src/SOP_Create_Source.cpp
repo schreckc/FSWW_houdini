@@ -130,7 +130,7 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
   int fr = context.getFrame();
 
   // TODO: user def time step
-  float dt_ = 0.1;
+  float dt_ = 0.1/3.0;
   // if (fr != 0) {
   //   dt_ = t/fr;
   // }

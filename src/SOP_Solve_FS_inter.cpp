@@ -88,6 +88,13 @@ SOP_Solve_FS_inter::cookInputGroups(OP_Context &context, int alone) {
 }
 
 
+void SOP_Solve_FS_inter::record(std::ofstream  file) {
+  std::list<InputPoint>::iterator it;
+  for (it = inputPoints.begin(); it !=inputPoints.end(); ++it) {
+    (*it)->record(file);
+  }
+}
+
 OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
   OP_AutoLockInputs inputs(this);
   if (inputs.lock(context) >= UT_ERROR_ABORT)
@@ -98,22 +105,26 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
   duplicateSource(0, context);
   float t = context.getTime();
   int fr = context.getFrame();
-  float dt = 0.1;
+  float dt = 0.1/3.0;
   t = dt*fr;
   
   const GU_Detail *bp = inputGeo(1); //boundary points
-  const GU_Detail *is = inputGeo(2); //input sources
-
-  int nb_wl = is->getPrimitiveRange().getEntries();
+  const GU_Detail *is;
+  //  if (getInputsArraySize() > 2) {
+    is = inputGeo(2); //input sources
+    //}
+    const GU_Detail *s = inputGeo(0);
+  int nb_wl = s->getPrimitiveRange().getEntries();
   
   if (fr == 1) {
+    
     // get wavelenght range and time step for each wavelength from input sources
     wave_lengths = std::vector<float>(nb_wl);
     ampli_steps = std::vector<int>(nb_wl);
     p_in = std::vector<VectorXcf>(nb_wl);
     svd = std::vector<Eigen::BDCSVD<MatrixXcf> >(nb_wl);
-    GA_ROHandleF w_handle(is->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
-    GA_ROHandleI as_handle(is->findAttribute(GA_ATTRIB_PRIMITIVE, "ampli_steps"));
+    GA_ROHandleF w_handle(s->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));
+    GA_ROHandleI as_handle(s->findAttribute(GA_ATTRIB_PRIMITIVE, "ampli_steps"));
     if (!w_handle.isValid()) {
       addError(SOP_ATTRIBUTE_INVALID, "wavelengths input sources");
       return error();
@@ -124,7 +135,7 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
     }
             
     int w = 0;
-    GA_Range range_is = is->getPrimitiveRange();
+    GA_Range range_is = s->getPrimitiveRange();
     for(GA_Iterator itis = range_is.begin(); itis != range_is.end(); ++itis, ++w) {
       GA_Offset prim_off = *itis;
       float wl = w_handle.get(prim_off);
@@ -170,6 +181,7 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
 	  float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
 	  float ret = r/v;
 	  float q = interpolation(ret, 0, dt*as);
+	  //std::cout<<"ret "<<ret<<" "<<r<<" "<<v<<" "<<dt<<" "<<as<<std::endl;
 	  if (q > 0 && r != 0) {
 	    q = 1;
 	    T(i, j) = q*fund_solution(k*r);
@@ -200,26 +212,26 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
   const GA_AIFTuple *tuple; 
   // fill the p_in for each wavelength
 
-  // add contribution from the spectrum computed at bp
-  GA_ROHandleI ws_attrib(bp->findIntTuple(GA_ATTRIB_DETAIL, "winsize", 1));
-  GA_ROHandleF spectrum_attrib;
-  int winsize = 0;
-  if (ws_attrib.isValid()) {
-    winsize = ws_attrib.get(0);
+  GA_ROHandleF abp_attrib(bp->findFloatTuple(GA_ATTRIB_POINT, "ampli", 2));
+  // GA_ROHandleF spectrum_attrib;
+  // int winsize = 0;
+  if (abp_attrib.isValid()) {
+    int winsize = bp->getPrimitiveRange().getEntries();
+    //    std::cout<<"ampli bound points found "<<winsize<<" "<<nb_wl <<std::endl;
     assert(nb_wl == winsize);
-    spectrum_attrib = GA_ROHandleF(bp->findFloatTuple(GA_ATTRIB_POINT, "spectrum", winsize));
-      if (!spectrum_attrib.isValid()) {
-      addError(SOP_MESSAGE, "Cannot find attribute spectrum");
-      return error();
-    }
-    // GA_Range range_bp = prim_bp->getPointRange();
-    // int i = 0;
-    // for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp, ++i) {
-    //   for (int w = 0; w < nb_wl; ++w) {
-    // 	float a = spectrum_attrib.get(*itbp, w);
-    // 	p_in[w] += a;
-    //   }
+    // spectrum_attrib = GA_ROHandleF(bp->findFloatTuple(GA_ATTRIB_POINT, "spectrum", winsize));
+    //   if (!spectrum_attrib.isValid()) {
+    //   addError(SOP_MESSAGE, "Cannot find attribute spectrum");
+    //   return error();
     // }
+  //   GA_Range range_bp = prim_bp->getPointRange();
+  //   int i = 0;
+  //   for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp, ++i) {
+  //     for (int w = 0; w < nb_wl; ++w) {
+  //   	float a = spectrum_attrib.get(*itbp, w);
+  //   	p_in[w] += a;
+  //     }
+  //   }
   }
   
   GA_ROHandleF a_handle(is->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size));
@@ -237,12 +249,17 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
 	UT_Vector3 pos_b = bp->getPos3(*itbp);
 	p_in[w](i) = 0;
-	if (ws_attrib.isValid()) {
-	  float ar = spectrum_attrib.get(*itbp, 2*w);
-	  float ai = spectrum_attrib.get(*itbp, 2*w+1);
+	// add contribution from the spectrum computed at bp
+	if (abp_attrib.isValid()) {
+	  float ar = abp_attrib.get(*itbp, 0);
+	  float ai = abp_attrib.get(*itbp, 1);
+	  //  std::cout<<"ampli bp "<<w<<" "<<i<<" "<<ar<<" "<<ai<<std::endl;
 	  p_in[w](i) += COMPLEX(ar, ai);
 	}
+		
 	// add contribution from input sources
+	//	if (getInputsArraySize() > 2) {
+	if (!abp_attrib.isValid()) {
 	const GA_Primitive* prim_is = is->getPrimitiveByIndex(w);
 	GA_Range range_is = prim_is->getPointRange();
 	for(GA_Iterator it = range_is.begin(); it != range_is.end(); ++it) {
@@ -262,8 +279,8 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       	  std::complex<float> ampli(ar, ai);
       	  p_in[w](i) -= ampli*fund_solution(k*r)*damping(damping_coef, r, k);
 	}
-
-	  
+	}
+	
 	// add contribution from other sources of the obstacle
 	const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
 	GA_Range range = prim->getPointRange();
@@ -285,7 +302,7 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       	      tuple->get(afs, *it, ai, 2*f_ret+1);
       	    }
 	    COMPLEX a(ar, ai);
-	    p_in[w](i) -= 0.8f*a*fund_solution(k*r)*damping(damping_coef, r, k);
+	    p_in[w](i) -= a*fund_solution(k*r)*damping(damping_coef, r, k);
 	  } else {
 	    // if (f_ret >= 1) {
 	    //   const GU_Detail *fs_ret_prev = myGDPLists[f_ret-1]; 
@@ -310,18 +327,33 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
   for (int w = 0; w < nb_wl; ++w) {
     int as = ampli_steps[w];
     if (fr%as == 0) {
+      //std::cout<<"p_in "<<w<<"\n"<<p_in[w]<<std::endl;
       const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
       GA_Range range = prim->getPointRange();
       int nb_es = range.getEntries();
       VectorXcf c(nb_es);
       c = svd[w].solve(p_in[w]);
+      // std::cout<<"C "<<w<<"\n"<<c<<std::endl;
       int i = 0;
       for(GA_Iterator it = range.begin(); it != range.end(); ++it, ++i) {
 	// if (real(c[i]) != 0 || imag(c[i]) != 0) {
 	//   std::cout<<"ampli c[i] "<<c[i]<<std::endl;
 	//   }
-	ampli_attrib.set(*it, 2*(fr/as), real(c[i]));
-	ampli_attrib.set(*it, 2*(fr/as)+1, imag(c[i]));
+	FLOAT prevr = 0, previ = 0;
+	if ((fr/as) > 0) {
+	  prevr = ampli_attrib.get(*it, 2*(fr/as-1));
+	  previ = ampli_attrib.get(*it, 2*(fr/as-1)+1);
+	}
+	FLOAT ar = real(c[i]);
+	FLOAT ai = imag(c[i]);
+	// FLOAT ar = 0.5f*(real(c[i]) + prevr);
+	// FLOAT ai = 0.5f*(imag(c[i]) + previ);
+	ampli_attrib.set(*it, 2*(fr/as), ar);
+	ampli_attrib.set(*it, 2*(fr/as)+1, ai);
+	  // 	if (real(c[i]) != 0 || imag(c[i]) != 0) {
+	  // std::cout<<"ampli c[i] "<<c[i]<<std::endl;
+	  // }
+
       }
       ampli_attrib.bumpDataId();
     }

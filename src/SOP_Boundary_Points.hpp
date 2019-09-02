@@ -46,13 +46,18 @@ public:
 					       int alone = 0);
 
 protected:
+  std::ofstream & record(std::ofstream & file);
+  std::ifstream & read(std::ifstream & file);
   virtual OP_ERROR cookMySop(OP_Context &context);
 private:
   void        getGroups(UT_String &str){ evalString(str, "group", 0, 0); }
   fpreal      DT(fpreal t)             { return evalFloat("dt_", 0, t); }
   int         WIN_SIZE(fpreal t) {return evalInt("win_size", 0, t);}
+  int         SHIFT_B(fpreal t) {return evalInt("shift_b", 0, t);}
+  int         SHIFT_U(fpreal t) {return evalInt("shift_u", 0, t);}
 
-  std::list<InputPoint> inputPoints;  
+  std::list<InputPoint> inputPoints;
+  std::vector<float> wave_lengths;
   const GA_PointGroup *myGroup;
 };
 
