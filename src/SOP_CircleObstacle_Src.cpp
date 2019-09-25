@@ -118,14 +118,16 @@ SOP_Circle_Obstacle_Src::cookInputGroups(OP_Context &context, int alone)
 
 OP_ERROR SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context) {
 
+
+   OP_AutoLockInputs inputs(this);
+  if (inputs.lock(context) >= UT_ERROR_ABORT)
+     return error();
+
   flags().timeDep = 0;
   float t = context.getTime();
   bool is_inter = INTER_SRC(t);
-  OP_AutoLockInputs inputs(this);
-  if (inputs.lock(context) >= UT_ERROR_ABORT)
-    return error();
   
-  gdp->clearAndDestroy();
+   gdp->clearAndDestroy();
 
   // get details and primitives attibutes from the input sources
   const GU_Detail *is = inputGeo(0); //input sources
@@ -225,7 +227,7 @@ OP_ERROR SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context) {
    
  
 
-  //create set of points for each wavelength, and liked them to their corresponding primitve
+  //create set of points for each wavelength, and link them to their corresponding primitve
   for (int w = 0; w < nb_wl; ++w) {
     float wl = wave_lengths[w];
     float density = DENSITY(t)/wl;
@@ -315,7 +317,7 @@ OP_ERROR SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context) {
     GA_Offset ptoff; 
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
       for (uint i = 0; i < buffer_size; ++i) {
-	ampli_attrib.set(ptoff, i, 0);
+  	ampli_attrib.set(ptoff, i, 0);
       }
     }
   }

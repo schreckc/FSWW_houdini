@@ -58,6 +58,7 @@ private:
   std::vector<int> ampli_steps;
   std::vector<VectorXcf> p_in;
   std::vector<Eigen::BDCSVD<MatrixXcf> > svd;
+  std::vector<MatrixXcf> matrices;
   int buffer_size;
   float damping_coef;
 };

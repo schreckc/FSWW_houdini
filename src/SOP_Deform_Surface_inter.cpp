@@ -106,6 +106,8 @@ OP_ERROR SOP_Deform_Surface_inter::cookMySop(OP_Context &context) {
   float dt = 0.1/3.0;
   t = dt*fr;
 
+  
+  
   float amp = AMP(t);
   int nb_inputs = getInputsArraySize();
   

@@ -214,13 +214,13 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
  
   if (buffer_size > 100) {
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
-      for (uint i = 0; i < 100; i+=2) {
-	ampli_attrib.set(ptoff, i, real(amp));
-	ampli_attrib.set(ptoff, i+1, imag(amp));
+      for (uint i = 0; i < 20; i+=2) {
+  	ampli_attrib.set(ptoff, i, real(amp));
+  	ampli_attrib.set(ptoff, i+1, imag(amp));
       }
-      for (uint i = 100; i < buffer_size; i+=2) {
-	ampli_attrib.set(ptoff, i, 0);
-	ampli_attrib.set(ptoff, i+1, 0);
+      for (uint i = 20; i < buffer_size; i+=2) {
+  	ampli_attrib.set(ptoff, i, 0);
+  	ampli_attrib.set(ptoff, i+1, 0);
       }
     }
   } else {
@@ -231,7 +231,7 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
       }
     
     }
-  }
+}
 
   // creation of the primitve attibutes
   GA_RWHandleF wl_attrib(gdp->findFloatTuple(GA_ATTRIB_PRIMITIVE, "wavelengths", 1));

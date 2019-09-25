@@ -58,6 +58,8 @@ private:
 
   std::list<InputPoint> inputPoints;
   std::vector<float> wave_lengths;
+  std::vector<int> ampli_steps;
+  InputPoint *middle;
   const GA_PointGroup *myGroup;
 };
 
