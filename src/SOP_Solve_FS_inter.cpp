@@ -157,8 +157,8 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
     buffer_size = bs_handle.get(0);
     damping_coef = damping_handle.get(0);
 
-   
-
+    shifts = std::vector<std::vector<int> >(nb_wl);
+    
     // create transfer matrix
     for (int w = 0; w < nb_wl; ++w) {
       float wl = wave_lengths[w];
@@ -171,32 +171,63 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       const GA_Primitive* prim_bp = bp->getPrimitiveByIndex(w);
       GA_Range range_bp = prim_bp->getPointRange();
       int nb_bp = range_bp.getEntries();
+      if (nb_fs <= 0) {
+	addError(SOP_ATTRIBUTE_INVALID, "no fundamental sources defined");
+	return error();
+      }
+      if (nb_bp <= 0) {
+	addError(SOP_ATTRIBUTE_INVALID, "no boundary points defined");
+	return error();
+      }
+      shifts[w] = std::vector<int>(nb_fs);
+      int ifs = 0;
+      for(GA_Iterator itfs = range_fs.begin(); itfs != range_fs.end(); ++itfs, ++ifs) {
+      	shifts[w][ifs] = 0;
+      	UT_Vector3 pos_fs = gdp->getPos3(*itfs);
+      	FLOAT d_min = distance3d(pos_fs, bp->getPos3(*(range_bp.begin())));
+      	for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
+      	  UT_Vector3 pos_b = bp->getPos3(*itbp);
+      	  FLOAT d_cur = distance3d(pos_fs, pos_b);
+      	  if (d_cur < d_min) {
+      	    d_min = d_cur;
+      	  }
+	
+      	}
+      	FLOAT ret = d_min/velocity(k);
+      	int shift = floor(ret/(dt*as));
+      	shifts[w][ifs] = shift;
+      	float q = interpolation(ret, shift*(dt*as), (shift+1)*dt*as);
+      	//std::cout<<"sifht q "<<w<<" "<<ifs<<" "<<shift<<" "<<q<<std::endl;
+      }
+	  
       MatrixXcf T = MatrixXcf(nb_bp, nb_fs);
       uint i = 0, j = 0;
       for(GA_Iterator itfs = range_fs.begin(); itfs != range_fs.end(); ++itfs) {
 	UT_Vector3 pos_fs = gdp->getPos3(*itfs);
 	i = 0;
-	uint nb_bp = 0;
+	uint nb = 0;
 	for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
 	  UT_Vector3 pos_b = bp->getPos3(*itbp);
+	  //	  std::cout<<"poa_b "<<pos_b<<"    pos_fs "<<pos_fs<<std::endl;
 	  float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
 	  float ret = r/v;
-	  float q = interpolation(ret, 0, dt*as);
-	  //std::cout<<"ret "<<ret<<" "<<r<<" "<<v<<" "<<dt<<" "<<as<<std::endl;
+	  float q = interpolation(ret, shifts[w][j]*(dt*as), (shifts[w][j]+1)*dt*as);
+	  //  std::cout<<"ret "<<ret<<" "<<r<<" "<<v<<" "<<dt<<" "<<as<<" "<<shifts[w][j]<<" "<<q<<std::endl;
 	  if (q > 0 && r != 0) {
 	    q = 1;
-	    T(i, j) = q*fund_solution(k*r);
-	    ++nb_bp;
+	    T(i, j) = q*fund_solution(k*r)*damping(damping_coef, r, k);
+	    ++nb;
 	  } else {
 	    T(i, j) = 0;
 	  }
 	  ++i;
 	}
-	std::cout<<"nb bp infuenced "<<nb_bp<<" "<<j<<std::endl;
+	std::cout<<"nb bp infuenced "<<nb<<" "<<j<<std::endl;
 	++j;
       }
       svd[w] =  BDCSVD<MatrixXcf>(T,ComputeFullU | ComputeFullV);
       matrices[w] = T;
+      //      std::cout<<"T \n"<<T<<"\n-----"<<nb_fs<<" "<<nb_bp<<std::endl;
     }
   }
 
@@ -305,7 +336,7 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
 	  if (ret > t) {
 	    --f_ret;
 	  }
-	  float q = interpolation(ret, 0, (dt*as));
+	  float q = interpolation(ret,  shifts[w][i]*(dt*as), (shifts[w][i]+1)*dt*as);//0, (dt*as));
 	  float ar = 0, ai = 0;
 	  if (q <= 0) {
 	    if (f_ret >= 0) {
@@ -346,7 +377,7 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       int nb_es = range.getEntries();
       VectorXcf c(nb_es);
       c = svd[w].solve(p_in[w]);
-      // std::cout<<"error "<<w<<"\n"<<matrices[w]*c - p_in[w]<<std::endl;
+      //std::cout<<"error "<<w<<"\n"<<matrices[w]*c - p_in[w]<<std::endl;
       //std::cout<<"C\n"<<c<<std::endl;
       int i = 0;
       for(GA_Iterator it = range.begin(); it != range.end(); ++it, ++i) {
@@ -354,20 +385,20 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
 	//   std::cout<<"ampli c[i] "<<c[i]<<std::endl;
 	//   }
 	FLOAT prevr = 0, previ = 0;
-	if ((fr/as) > 0) {
-	  prevr = ampli_attrib.get(*it, 2*(fr/as-1));
-	  previ = ampli_attrib.get(*it, 2*(fr/as-1)+1);
-	}
+	if ((fr/as - shifts[w][i]) >= 0) {
+	  // prevr = ampli_attrib.get(*it, 2*(fr/as-1));
+	  // previ = ampli_attrib.get(*it, 2*(fr/as-1)+1);
+	
 	FLOAT ar = real(c[i]);
 	FLOAT ai = imag(c[i]);
 	// FLOAT ar = 0.5f*(real(c[i]) + prevr);
 	// FLOAT ai = 0.5f*(imag(c[i]) + previ);
-	ampli_attrib.set(*it, 2*(fr/as), ar);
-	ampli_attrib.set(*it, 2*(fr/as)+1, ai);
+	ampli_attrib.set(*it, 2*(fr/as - shifts[w][i]), ar);
+	ampli_attrib.set(*it, 2*(fr/as - shifts[w][i])+1, ai);
 	  // 	if (real(c[i]) != 0 || imag(c[i]) != 0) {
-	  // std::cout<<"ampli c[i] "<<c[i]<<std::endl;
+	std::cout<<"ampli c[i] "<<c[i]<<" "<<sqrt(norm(c[i]))<<std::endl;
 	  // }
-
+	}
       }
       ampli_attrib.bumpDataId();
     }

@@ -19,7 +19,7 @@
  * 8: Gaussian(a=3.5)
  * 9: Gaussian(a=4.5)
  */
-#define WINDOW_FUNC 0
+#define WINDOW_FUNC 9
 
 class InputPoint {
 private:
@@ -83,17 +83,17 @@ public:
   }
     
   ~InputPoint() {
-    // if (spectrum_re != NULL) {
-    //   delete[]spectrum_re;
-    //   spectrum_re = NULL;
-    // }
-    // if (spectrum_im != NULL) {
-    //   delete[]spectrum_im;
-    //   spectrum_im = NULL;
-    // }
+     if (spectrum_re != NULL) {
+       delete[]spectrum_re;
+       spectrum_re = NULL;
+     }
+     if (spectrum_im != NULL) {
+       delete[]spectrum_im;
+       spectrum_im = NULL;
+     }
     // plotSpectrum();
     // plotSpectrogram();
-    // plotSamples();xo
+    // plotSamples();
   }
   
   void setPos(VEC2 p) {
@@ -113,7 +113,7 @@ public:
   
   void update(FLOAT next_sample) {
     samples.push_front(next_sample);
-    samples.pop_back();
+    //    samples.pop_back();
     if (t == 1/*window_size / 16*/) {
       computeSpectrum();
       t = 0;
@@ -130,11 +130,11 @@ public:
 
     std::list<FLOAT>::iterator it;
     uint i = 0;
-    for (it = samples.begin(); it != samples.end(); ++it, ++i) {
+    for (it = samples.begin(); /*it != samples.end()*/ i < window_size; ++it, ++i) {
       in_re[i] = (*it);
       in_im[i] = 0.0;
     }
-    //      WindowFunc(WINDOW_FUNC, window_size, in_re);
+    WindowFunc(WINDOW_FUNC, window_size, in_re);
     FFT(window_size, false, in_re, in_im, spectrum_re, spectrum_im);
     //RealFFT(window_size, in_re, spectrum_re, spectrum_im);
     //FFT(window_size, true, spectrum_re, spectrum_im, in_re, in_im);
@@ -157,13 +157,13 @@ public:
     spectrogram.push_back(power_spectrum);
     spectrogram_re.push_back(spec_re);
     spectrogram_im.push_back(spec_im);
-    if (spectrogram.size() > 128) {
-      // plotSpectrum();
-      // plotSpectrogram();
-      // plotSamples();
-      //    exit(0);
-      spectrogram.pop_front();
-    }
+    // if (spectrogram.size() > 2048) {
+    //   // plotSpectrum();
+    //   // plotSpectrogram();
+    //   // plotSamples();
+    //   //    exit(0);
+    //   spectrogram.pop_front();
+    // }
   
     delete[] in_re;
     delete[] in_im;
@@ -179,13 +179,13 @@ public:
     std::stringstream ss;
     ss <<name<<"_spectrum.txt";
     std::string str(ss.str());
-    // std::cout<<str<<std::endl;
+    //    std::cout<<"Plotting "<<str<<std::endl;
     std::ofstream  out_file;
     out_file.open(str.c_str());
 
     FLOAT epsilon_db = 1e-18; 
   
-    for (uint i = 0; i < nb_frequencies; ++i) {
+    for (uint i = 0; i < nb_frequencies/2; ++i) {
       FLOAT e = powf(spectrum_re[i]/window_size, 2) + powf(spectrum_im[i]/window_size, 2);    
       FLOAT e_db = - 10*log10(e  + epsilon_db);
       out_file << i*frequency_step << " " << e <<"\n";
@@ -199,7 +199,7 @@ public:
     std::ofstream  out_file2;
     out_file2.open(str2.c_str());
   
-    for (uint i = 0; i < nb_frequencies; ++i) {
+    for (uint i = 0; i < nb_frequencies/2; ++i) {
       out_file2 << i*frequency_step << " " << spectrum_re[i]/window_size <<" "<<spectrum_im[i]/window_size <<"\n";
     }
     out_file2.close();
@@ -211,6 +211,7 @@ public:
     std::stringstream ss;
     ss <<name<<"_spectrogram.txt";
     std::string str(ss.str());
+    //std::cout<<"Plotting "<<str<<std::endl;
     std::ofstream  out_file;
     out_file.open(str.c_str());
 
@@ -219,11 +220,13 @@ public:
     std::list<std::vector<FLOAT> >::const_iterator it_im = spectrogram_im.begin();
     uint i = 0;
     for (it = spectrogram.begin(); it != spectrogram.end(); ++it, ++i, ++it_re, ++it_im) {
-      for (uint j = 0; j < nb_frequencies; ++j) {
+      for (uint j = 0; j < nb_frequencies/2; ++j) {
 	out_file << i*dt<<" "<<j*frequency_step << " " << (*it)[j] <<" "<<(*it_re)[j]<<" "<<(*it_im)[j]<<"\n";
       }
+      //      std::cout<<i<<" ";
       out_file <<"\n";
     }
+    //    std::cout<<" "<<std::endl;
     out_file.close();
   }
   void plotSamples() const {

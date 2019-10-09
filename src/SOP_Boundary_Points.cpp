@@ -212,15 +212,15 @@ OP_ERROR SOP_Boundary_Points::cookMySop(OP_Context &context) {
      UT_Vector3 pos_fs = fs->getPos3(*itfs);
      //  gdp->setPos3(ptoff+i, pos_fs);
       InputPoint ip(winsize, dt_);
-      ip.setPos(pos_fs(0), pos_fs(1));
+      ip.setPos(pos_fs(0), pos_fs(2));
       inputPoints.push_back(ip);
-      if (i == 39) {
-	middle = &inputPoints.back();;
-      }
+      // if (i == 39) {
+      // 	middle = &inputPoints.back();;
+      // }
       ++i;
    }
-   inputPoints.front().setName("bp_sop_test");
-   middle->setName("bp_middle_test");
+    inputPoints.front().setName("bp_sop_test");
+   // middle->setName("bp_middle_test");
 
   
    //  begin creation of geometry
@@ -392,6 +392,17 @@ OP_ERROR SOP_Boundary_Points::cookMySop(OP_Context &context) {
 	//   std::cout<<"ampli0  "<<a<<std::endl;
 	// }
 	a*= exp(COMPLEX(0, 1)*(om*(float)(fr - winsize/2)*dt_));
+	a /= 0.272192;
+	//std::cout<<"ampli from spectrum "<<a<<std::endl;
+	// if ((fr/as - 2) <= 100) {
+	//   FLOAT r = sqrt(pow((*it).getPos()(0), 2) + pow((*it).getPos()(1), 2));
+	//   //	  std::cout<<"r "<<r<<std::endl;
+	//   a = COMPLEX(5, 0)*fund_solution(k*r)*damping(0.01, r, k);;
+	//   //	  std::cout<<"ampli not from spectrum "<<a<<std::endl;//<<" "<<fund_solution(k*r)*damping(0.01, r, k)<<std::endl;
+	// } else {
+	//   a = 0;
+	// }
+
 	ampli_attrib.set(*itbp, 0, real(a));
 	ampli_attrib.set(*itbp, 1, imag(a));
 	 // if (itbp == range_bp.begin()) {
@@ -412,12 +423,12 @@ OP_ERROR SOP_Boundary_Points::cookMySop(OP_Context &context) {
       // }
     }
     //  std::cout<<"plotting spectrum "<<fr<<std::endl;
-    inputPoints.front().plotSpectrum();
-    inputPoints.front().plotSpectrogram();
-    inputPoints.front().plotSamples();
-    middle->plotSpectrum();
-    middle->plotSpectrogram();
-    middle->plotSamples();
+    // inputPoints.front().plotSpectrum();
+    // inputPoints.front().plotSpectrogram();
+    // inputPoints.front().plotSamples();
+    // middle->plotSpectrum();
+    // middle->plotSpectrogram();
+    // middle->plotSamples();
     }
   return error();
 }

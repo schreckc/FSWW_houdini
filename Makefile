@@ -3,7 +3,7 @@ HOUDINI_DIR=/opt/hfs17.0.459/
 SHELL := /bin/bash
 EIGEN=/usr/include/eigen3
 
-all: inter freq obstacles
+all: inter freq obstacles boundary_points merge
 
 env:
 	pushd $(HOUDINI_DIR);source houdini_setup;popd
@@ -14,7 +14,7 @@ freq: create_source solve_FS deform_surface
 test_spec: $(SRC)main.cpp $(SRC)definitions.hpp $(SRC)FFT.hpp
 	gcc src/main.cpp -I/usr/include/eigen3 -std=c++11 -g -o test
 
-obstacles: circle square texture
+obstacles: circle square texture point
 
 
 create_source: $(SRC)SOP_Create_Source.cpp $(SRC)SOP_Create_Source.hpp $(SRC)definitions.hpp
@@ -44,11 +44,17 @@ circle: $(SRC)SOP_CircleObstacle_Src.cpp $(SRC)SOP_CircleObstacle_Src.hpp $(SRC)
 square: $(SRC)SOP_SquareObstacle_Src.cpp $(SRC)SOP_SquareObstacle_Src.hpp $(SRC)definitions.hpp
 	hcustom $(SRC)SOP_SquareObstacle_Src.cpp -I$(EIGEN) -g
 
+point: $(SRC)SOP_PointObstacle_Src.cpp $(SRC)SOP_PointObstacle_Src.hpp $(SRC)definitions.hpp
+	hcustom $(SRC)SOP_PointObstacle_Src.cpp -I$(EIGEN) -g
+
 merge: $(SRC)SOP_Merge_Sources.cpp $(SRC)SOP_Merge_Sources.hpp $(SRC)definitions.hpp
 	hcustom $(SRC)SOP_Merge_Sources.cpp -I$(EIGEN) -g
 
 boundary_points: $(SRC)SOP_Boundary_Points.cpp $(SRC)SOP_Boundary_Points.hpp $(SRC)InputPoint.hpp $(SRC)FFT.hpp $(SRC)definitions.hpp
 	hcustom $(SRC)SOP_Boundary_Points.cpp -I$(EIGEN) -g
+
+recording: $(SRC)SOP_Recording.cpp $(SRC)SOP_Recording.hpp $(SRC)InputPoint.hpp $(SRC)FFT.hpp $(SRC)definitions.hpp
+	hcustom $(SRC)SOP_Recording.cpp -I$(EIGEN) -g
 
 clean:
 	rm ($SRC)*.o

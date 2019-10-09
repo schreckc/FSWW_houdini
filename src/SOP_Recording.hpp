@@ -22,47 +22,46 @@
  * SOFTWARE.
  *
  *----------------------------------------------------------------------------
- * Solve FS interactive (aperiodic) SOP
+ * Recording SOP
  *----------------------------------------------------------------------------
- * Compute amplitude of the obstacle sources (input 0) such that the boundary condition are
- * respected (as well as possible, least square) at the boundary points (input 1) given the
- * incoming waves (input 2).
  */
 
 
-#ifndef __SOP_Solve_FS_inter_h__
-#define __SOP_Solve_FS_inter_h__
+#ifndef __SOP_Recording_h__
+#define __SOP_Recording_h__
 
 #include <SOP/SOP_Node.h>
-#include "definitions.hpp"
-#include <Eigen/SVD>
+#include "InputPoint.hpp"
 
-class SOP_Solve_FS_inter : public SOP_Node {
+class SOP_Recording : public SOP_Node {
+  
 public:
-    SOP_Solve_FS_inter(OP_Network *net, const char *name, OP_Operator *op);
-    virtual ~SOP_Solve_FS_inter();
+  SOP_Recording(OP_Network *net, const char *name, OP_Operator *op);
+  virtual ~SOP_Recording();
 
-    static PRM_Template myTemplateList[];
-    static OP_Node *myConstructor(OP_Network*, const char *, OP_Operator *);
-    virtual OP_ERROR             cookInputGroups(OP_Context &context, 
-                                                int alone = 0);
+  static PRM_Template myTemplateList[];
+  static OP_Node *myConstructor(OP_Network*, const char *, OP_Operator *);
+
+  virtual OP_ERROR             cookInputGroups(OP_Context &context, 
+					       int alone = 0);
 
 protected:
-    virtual OP_ERROR cookMySop(OP_Context &context);
+  std::ofstream & record(std::ofstream & file);
+  std::ifstream & read(std::ifstream & file);
+  virtual OP_ERROR cookMySop(OP_Context &context);
 private:
-    void        getGroups(UT_String &str){ evalString(str, "group", 0, 0); }
+  void        getGroups(UT_String &str){ evalString(str, "group", 0, 0); }
+  fpreal      DT(fpreal t)             { return evalFloat("dt_", 0, t); }
+  int         WIN_SIZE(fpreal t) {return evalInt("win_size", 0, t);}
+  int         SHIFT_B(fpreal t) {return evalInt("shift_b", 0, t);}
+  int         SHIFT_U(fpreal t) {return evalInt("shift_u", 0, t);}
+  void        NAME(UT_String &str){ evalString(str, "name", 0, 0); }
 
-    const GA_PointGroup *myGroup;
-
+  std::list<InputPoint> inputPoints;
   std::vector<float> wave_lengths;
   std::vector<int> ampli_steps;
-  std::vector<VectorXcf> p_in;
-  std::vector<Eigen::BDCSVD<MatrixXcf> > svd;
-  std::vector<MatrixXcf> matrices;
-  int buffer_size;
-  float damping_coef;
 
-  std::vector<std::vector<int> > shifts;
+  const GA_PointGroup *myGroup;
 };
 
 #endif
