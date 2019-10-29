@@ -124,6 +124,9 @@ SOP_Create_Source::cookInputGroups(OP_Context &context, int alone)
 
 
 OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
+     OP_AutoLockInputs inputs(this);
+    if (inputs.lock(context) >= UT_ERROR_ABORT)
+      return error();
   flags().timeDep = 0;
 
   float t = context.getTime();
@@ -212,13 +215,13 @@ OP_ERROR SOP_Create_Source::cookMySop(OP_Context &context) {
     return error();
   }
  
-  if (buffer_size > 100) {
+  if (buffer_size > 20) {
     GA_FOR_ALL_PTOFF(gdp, ptoff) {
-      for (uint i = 0; i < 100; i+=2) {
+      for (uint i = 0; i < 20; i+=2) {
   	ampli_attrib.set(ptoff, i, real(amp));
   	ampli_attrib.set(ptoff, i+1, imag(amp));
       }
-      for (uint i = 100; i < buffer_size; i+=2) {
+      for (uint i = 20; i < buffer_size; i+=2) {
   	ampli_attrib.set(ptoff, i, 0);
   	ampli_attrib.set(ptoff, i+1, 0);
       }

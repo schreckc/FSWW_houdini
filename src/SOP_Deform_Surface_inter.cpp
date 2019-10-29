@@ -122,7 +122,7 @@ OP_ERROR SOP_Deform_Surface_inter::cookMySop(OP_Context &context) {
     gdp->setPos3(ptoff, Pvalue);
   }
 
-  
+
   for (int input = 1; input < nb_inputs; ++input) { //all these inputs should be sets of sources
     const GU_Detail *fs = inputGeo(input);
     GA_ROHandleF w_handle(fs->findAttribute(GA_ATTRIB_PRIMITIVE, "wavelengths"));

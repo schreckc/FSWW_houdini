@@ -56,5 +56,11 @@ boundary_points: $(SRC)SOP_Boundary_Points.cpp $(SRC)SOP_Boundary_Points.hpp $(S
 recording: $(SRC)SOP_Recording.cpp $(SRC)SOP_Recording.hpp $(SRC)InputPoint.hpp $(SRC)FFT.hpp $(SRC)definitions.hpp
 	hcustom $(SRC)SOP_Recording.cpp -I$(EIGEN) -g
 
+write_grid: $(SRC)SOP_WriteGrid.cpp $(SRC)SOP_WriteGrid.hpp $(SRC)definitions.hpp
+	hcustom $(SRC)SOP_WriteGrid.cpp -I$(EIGEN) -g
+
+read_grid: $(SRC)SOP_ReadGrid.cpp $(SRC)SOP_ReadGrid.hpp $(SRC)definitions.hpp
+	hcustom $(SRC)SOP_ReadGrid.cpp -I$(EIGEN) -g
+
 clean:
 	rm ($SRC)*.o

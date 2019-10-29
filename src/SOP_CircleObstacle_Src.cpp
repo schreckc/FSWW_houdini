@@ -117,8 +117,6 @@ SOP_Circle_Obstacle_Src::cookInputGroups(OP_Context &context, int alone)
 
 
 OP_ERROR SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context) {
-
-
    OP_AutoLockInputs inputs(this);
   if (inputs.lock(context) >= UT_ERROR_ABORT)
      return error();
@@ -127,7 +125,7 @@ OP_ERROR SOP_Circle_Obstacle_Src::cookMySop(OP_Context &context) {
   float t = context.getTime();
   bool is_inter = INTER_SRC(t);
   
-   gdp->clearAndDestroy();
+  gdp->clearAndDestroy();
 
   // get details and primitives attibutes from the input sources
   const GU_Detail *is = inputGeo(0); //input sources

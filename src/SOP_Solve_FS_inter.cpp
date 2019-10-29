@@ -96,18 +96,21 @@ SOP_Solve_FS_inter::cookInputGroups(OP_Context &context, int alone) {
 // }
 
 OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
-  OP_AutoLockInputs inputs(this);
-  if (inputs.lock(context) >= UT_ERROR_ABORT)
-    return error();
+   OP_AutoLockInputs inputs(this);
+    if (inputs.lock(context) >= UT_ERROR_ABORT)
+      return error();
 
+  
   flags().timeDep = 1;
-  
+   float t = context.getTime();
+   int fr = context.getFrame();
+   float dt = 0.1/3.0;
+   t = dt*fr;
+
+   gdp->clearAndDestroy();  
   duplicateSource(0, context);
-  float t = context.getTime();
-  int fr = context.getFrame();
-  float dt = 0.1/3.0;
-  t = dt*fr;
   
+
   const GU_Detail *bp = inputGeo(1); //boundary points
   const GU_Detail *is;
   //  if (getInputsArraySize() > 2) {
@@ -172,12 +175,12 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       GA_Range range_bp = prim_bp->getPointRange();
       int nb_bp = range_bp.getEntries();
       if (nb_fs <= 0) {
-	addError(SOP_ATTRIBUTE_INVALID, "no fundamental sources defined");
-	return error();
+  	addError(SOP_ATTRIBUTE_INVALID, "no fundamental sources defined");
+  	return error();
       }
       if (nb_bp <= 0) {
-	addError(SOP_ATTRIBUTE_INVALID, "no boundary points defined");
-	return error();
+  	addError(SOP_ATTRIBUTE_INVALID, "no boundary points defined");
+  	return error();
       }
       shifts[w] = std::vector<int>(nb_fs);
       int ifs = 0;
@@ -197,33 +200,33 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       	int shift = floor(ret/(dt*as));
       	shifts[w][ifs] = shift;
       	float q = interpolation(ret, shift*(dt*as), (shift+1)*dt*as);
-      	//std::cout<<"sifht q "<<w<<" "<<ifs<<" "<<shift<<" "<<q<<std::endl;
+      	std::cout<<"sifht q "<<w<<" "<<ifs<<" "<<shift<<" "<<q<<std::endl;
       }
 	  
       MatrixXcf T = MatrixXcf(nb_bp, nb_fs);
       uint i = 0, j = 0;
       for(GA_Iterator itfs = range_fs.begin(); itfs != range_fs.end(); ++itfs) {
-	UT_Vector3 pos_fs = gdp->getPos3(*itfs);
-	i = 0;
-	uint nb = 0;
-	for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
-	  UT_Vector3 pos_b = bp->getPos3(*itbp);
-	  //	  std::cout<<"poa_b "<<pos_b<<"    pos_fs "<<pos_fs<<std::endl;
-	  float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
-	  float ret = r/v;
-	  float q = interpolation(ret, shifts[w][j]*(dt*as), (shifts[w][j]+1)*dt*as);
-	  //  std::cout<<"ret "<<ret<<" "<<r<<" "<<v<<" "<<dt<<" "<<as<<" "<<shifts[w][j]<<" "<<q<<std::endl;
-	  if (q > 0 && r != 0) {
-	    q = 1;
-	    T(i, j) = q*fund_solution(k*r)*damping(damping_coef, r, k);
-	    ++nb;
-	  } else {
-	    T(i, j) = 0;
-	  }
-	  ++i;
-	}
-	std::cout<<"nb bp infuenced "<<nb<<" "<<j<<std::endl;
-	++j;
+  	UT_Vector3 pos_fs = gdp->getPos3(*itfs);
+  	i = 0;
+  	uint nb = 0;
+  	for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
+  	  UT_Vector3 pos_b = bp->getPos3(*itbp);
+  	  //	  std::cout<<"poa_b "<<pos_b<<"    pos_fs "<<pos_fs<<std::endl;
+  	  float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
+  	  float ret = r/v;
+  	  float q = interpolation(ret, shifts[w][j]*(dt*as), (shifts[w][j]+1)*dt*as);
+  	  //  std::cout<<"ret "<<ret<<" "<<r<<" "<<v<<" "<<dt<<" "<<as<<" "<<shifts[w][j]<<" "<<q<<std::endl;
+  	  if (q > 0 && r != 0) {
+  	    q = 1;
+  	    T(i, j) = q*fund_solution(k*r)*damping(damping_coef, r, k);
+  	    ++nb;
+  	  } else {
+  	    T(i, j) = 0;
+  	  }
+  	  ++i;
+  	}
+  	std::cout<<"nb bp infuenced "<<nb<<" "<<j<<std::endl;
+  	++j;
       }
       svd[w] =  BDCSVD<MatrixXcf>(T,ComputeFullU | ComputeFullV);
       matrices[w] = T;
@@ -281,87 +284,87 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       int nb_bp = range_bp.getEntries();
       p_in[w] = VectorXcf(nb_bp);
       for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp) {
-	UT_Vector3 pos_b = bp->getPos3(*itbp);
-	p_in[w](i) = 0;
-	// add contribution from the spectrum computed at bp
-	if (abp_attrib.isValid()) {
-	  COMPLEX a(abp_attrib.get(*itbp, 0), abp_attrib.get(*itbp, 1));
-	  // float ar = real(a);
-	  // float ai = imag(a);
-	  // if (itbp == range_bp.begin()) {
-	  //   std::cout<<"wl "<<w<<" "<<wl<<"    ampli "<<a<<std::endl;
-	  // }
-	  // float ar = abp_attrib.get(*itbp, 0);
-	  // float ai = abp_attrib.get(*itbp, 1);
-	  //  std::cout<<"ampli bp "<<w<<" "<<i<<" "<<ar<<" "<<ai<<std::endl;
-	  //	  p_in[w](i) += COMPLEX(ar, ai);
-	  p_in[w](i) += a;
-	  //  if (fr/as <5 && w == 0) {
-	  //    p_in[w](i) += 1;
-	  // }
-	}
+  	UT_Vector3 pos_b = bp->getPos3(*itbp);
+  	p_in[w](i) = 0;
+  	// add contribution from the spectrum computed at bp
+  	if (abp_attrib.isValid()) {
+  	  COMPLEX a(abp_attrib.get(*itbp, 0), abp_attrib.get(*itbp, 1));
+  	  // float ar = real(a);
+  	  // float ai = imag(a);
+  	  // if (itbp == range_bp.begin()) {
+  	  //   std::cout<<"wl "<<w<<" "<<wl<<"    ampli "<<a<<std::endl;
+  	  // }
+  	  // float ar = abp_attrib.get(*itbp, 0);
+  	  // float ai = abp_attrib.get(*itbp, 1);
+  	  //  std::cout<<"ampli bp "<<w<<" "<<i<<" "<<ar<<" "<<ai<<std::endl;
+  	  //	  p_in[w](i) += COMPLEX(ar, ai);
+  	  p_in[w](i) += a;
+  	  //  if (fr/as <5 && w == 0) {
+  	  //    p_in[w](i) += 1;
+  	  // }
+  	}
 		
-	// add contribution from input sources
-	//	if (getInputsArraySize() > 2) {
-	// if (!abp_attrib.isValid()) {
-	// const GA_Primitive* prim_is = is->getPrimitiveByIndex(w);
-	// GA_Range range_is = prim_is->getPointRange();
-	// for(GA_Iterator it = range_is.begin(); it != range_is.end(); ++it) {
-	//   UT_Vector3 pos_is = is->getPos3(*it);
-	//   float r = sqrt(pow(pos_b.x() - pos_is.x(), 2) + pow(pos_b.z() - pos_is.z(), 2));
-	//   float v = velocity(k);
-	//   fpreal t_ret = t - r/v;
-	//   OP_Context c_ret(t_ret);
-	//   int f_ret = floor((t_ret)/(dt*as))+1;
-	//   float ar = 0, ai = 0;
+  	// add contribution from input sources
+  	//	if (getInputsArraySize() > 2) {
+  	// if (!abp_attrib.isValid()) {
+  	// const GA_Primitive* prim_is = is->getPrimitiveByIndex(w);
+  	// GA_Range range_is = prim_is->getPointRange();
+  	// for(GA_Iterator it = range_is.begin(); it != range_is.end(); ++it) {
+  	//   UT_Vector3 pos_is = is->getPos3(*it);
+  	//   float r = sqrt(pow(pos_b.x() - pos_is.x(), 2) + pow(pos_b.z() - pos_is.z(), 2));
+  	//   float v = velocity(k);
+  	//   fpreal t_ret = t - r/v;
+  	//   OP_Context c_ret(t_ret);
+  	//   int f_ret = floor((t_ret)/(dt*as))+1;
+  	//   float ar = 0, ai = 0;
       	//   if (f_ret >= 1) {
-	//     afs = is->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size);
-	//     tuple = afs->getAIFTuple();
-	//     tuple->get(afs, *it, ar, 2*f_ret);
-	//     tuple->get(afs, *it, ai, 2*f_ret+1);
-	//   }
+  	//     afs = is->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size);
+  	//     tuple = afs->getAIFTuple();
+  	//     tuple->get(afs, *it, ar, 2*f_ret);
+  	//     tuple->get(afs, *it, ai, 2*f_ret+1);
+  	//   }
       	//   std::complex<float> ampli(ar, ai);
       	//   p_in[w](i) -= ampli*fund_solution(k*r)*damping(damping_coef, r, k);
-	// }
-	// }
+  	// }
+  	// }
 	
-	// add contribution from other sources of the obstacle
-	const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
-	GA_Range range = prim->getPointRange();
-	for(GA_Iterator it = range.begin(); it != range.end(); ++it) {
-	  UT_Vector3 pos_fs = gdp->getPos3(*it);
-	  float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
-	  float ret = r/velocity(k);
-	  int f_ret = floor((t - ret)/(dt*as))+1;
-	  if (ret > t) {
-	    --f_ret;
-	  }
-	  float q = interpolation(ret,  shifts[w][i]*(dt*as), (shifts[w][i]+1)*dt*as);//0, (dt*as));
-	  float ar = 0, ai = 0;
-	  if (q <= 0) {
-	    if (f_ret >= 0) {
+  	// add contribution from other sources of the obstacle
+  	const GA_Primitive* prim = gdp->getPrimitiveByIndex(w);
+  	GA_Range range = prim->getPointRange();
+  	for(GA_Iterator it = range.begin(); it != range.end(); ++it) {
+  	  UT_Vector3 pos_fs = gdp->getPos3(*it);
+  	  float r = sqrt(pow(pos_b.x() - pos_fs.x(), 2) + pow(pos_b.z() - pos_fs.z(), 2));
+  	  float ret = r/velocity(k);
+  	  int f_ret = floor((t - ret)/(dt*as))+1;
+  	  if (ret > t) {
+  	    --f_ret;
+  	  }
+  	  float q = interpolation(ret,  shifts[w][i]*(dt*as), (shifts[w][i]+1)*dt*as);//0, (dt*as));
+  	  float ar = 0, ai = 0;
+  	  if (q <= 0) {
+  	    if (f_ret >= 0) {
       	      afs = gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size);
       	      tuple = afs->getAIFTuple();
       	      tuple->get(afs, *it, ar, 2*f_ret);
       	      tuple->get(afs, *it, ai, 2*f_ret+1);
       	    }
-	    COMPLEX a(ar, ai);
-	    p_in[w](i) -= a*fund_solution(k*r)*damping(damping_coef, r, k);
-	  } else {
+  	    COMPLEX a(ar, ai);
+  	    p_in[w](i) -= a*fund_solution(k*r)*damping(damping_coef, r, k);
+  	  } else {
 	
-	    //   if (f_ret >= 1) {
+  	    //   if (f_ret >= 1) {
       	    //   afs = gdp->findFloatTuple(GA_ATTRIB_POINT, "ampli", buffer_size);
       	    //   tuple = afs->getAIFTuple();
       	    //   tuple->get(afs, *it, ar, 2*(f_ret-1));
       	    //   tuple->get(afs, *it, ai, 2*(f_ret-1)+1);
       	    // }
-	    //  COMPLEX a_prev(ar, ai);
-	    //  COMPLEX ampli = (1-q)*a_prev;
-	    //  //COMPLEX ampli = a_prev;
-	    //   p_in[w](i) -= ampli*fund_solution(k*r)*damping(damping_coef, r, k);
-	  }
-	}
-	++i;
+  	    //  COMPLEX a_prev(ar, ai);
+  	    //  COMPLEX ampli = (1-q)*a_prev;
+  	    //  //COMPLEX ampli = a_prev;
+  	    //   p_in[w](i) -= ampli*fund_solution(k*r)*damping(damping_coef, r, k);
+  	  }
+  	}
+  	++i;
       }
     }
   }
@@ -381,24 +384,24 @@ OP_ERROR SOP_Solve_FS_inter::cookMySop(OP_Context &context) {
       //std::cout<<"C\n"<<c<<std::endl;
       int i = 0;
       for(GA_Iterator it = range.begin(); it != range.end(); ++it, ++i) {
-	// if (real(c[i]) != 0 || imag(c[i]) != 0) {
-	//   std::cout<<"ampli c[i] "<<c[i]<<std::endl;
-	//   }
-	FLOAT prevr = 0, previ = 0;
-	if ((fr/as - shifts[w][i]) >= 0) {
-	  // prevr = ampli_attrib.get(*it, 2*(fr/as-1));
-	  // previ = ampli_attrib.get(*it, 2*(fr/as-1)+1);
+  	// if (real(c[i]) != 0 || imag(c[i]) != 0) {
+  	//   std::cout<<"ampli c[i] "<<c[i]<<std::endl;
+  	//   }
+  	FLOAT prevr = 0, previ = 0;
+  	if ((fr/as - shifts[w][i]) >= 0) {
+  	  // prevr = ampli_attrib.get(*it, 2*(fr/as-1));
+  	  // previ = ampli_attrib.get(*it, 2*(fr/as-1)+1);
 	
-	FLOAT ar = real(c[i]);
-	FLOAT ai = imag(c[i]);
-	// FLOAT ar = 0.5f*(real(c[i]) + prevr);
-	// FLOAT ai = 0.5f*(imag(c[i]) + previ);
-	ampli_attrib.set(*it, 2*(fr/as - shifts[w][i]), ar);
-	ampli_attrib.set(*it, 2*(fr/as - shifts[w][i])+1, ai);
-	  // 	if (real(c[i]) != 0 || imag(c[i]) != 0) {
-	std::cout<<"ampli c[i] "<<c[i]<<" "<<sqrt(norm(c[i]))<<std::endl;
-	  // }
-	}
+  	FLOAT ar = real(c[i]);
+  	FLOAT ai = imag(c[i]);
+  	// FLOAT ar = 0.5f*(real(c[i]) + prevr);
+  	// FLOAT ai = 0.5f*(imag(c[i]) + previ);
+  	ampli_attrib.set(*it, 2*(fr/as - shifts[w][i]), ar);
+  	ampli_attrib.set(*it, 2*(fr/as - shifts[w][i])+1, ai);
+  	  // 	if (real(c[i]) != 0 || imag(c[i]) != 0) {
+	//  	std::cout<<"ampli c[i] "<<c[i]<<" "<<sqrt(norm(c[i]))<<std::endl;
+  	  // }
+  	}
       }
       ampli_attrib.bumpDataId();
     }

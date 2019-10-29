@@ -119,6 +119,10 @@ std::ifstream & SOP_Boundary_Points::read(std::ifstream & file) {
 }
 
 OP_ERROR SOP_Boundary_Points::cookMySop(OP_Context &context) {
+    OP_AutoLockInputs inputs(this);
+  if (inputs.lock(context) >= UT_ERROR_ABORT)
+    return error();
+
   flags().timeDep = 1;
 
  float t = context.getTime();
@@ -131,9 +135,7 @@ OP_ERROR SOP_Boundary_Points::cookMySop(OP_Context &context) {
    //   dt_ = t/fr;
    // }
    // std::cout<<"TIME STEP "<<dt_<<" "<<t<<" "<<fr<<std::endl;
-   OP_AutoLockInputs inputs(this);
-   if (inputs.lock(context) >= UT_ERROR_ABORT)
-     return error();
+
   const GU_Detail *fs = inputGeo(0);
   int winsize = WIN_SIZE(0);
    uint shift_b = SHIFT_B(0);
@@ -144,18 +146,18 @@ OP_ERROR SOP_Boundary_Points::cookMySop(OP_Context &context) {
     float sample_rate = 1.0/(dt_);
     float freq_step = 1.0/(winsize*dt_);
 
-  float f_min = freq_step;
-  float f_max = sample_rate;
-  float k_min = pow((2*M_PI*f_min), 2)/9.81;
-  float k_max = pow((2*M_PI*f_max), 2)/9.81;
-  float w_min = 2*M_PI/k_max;
-  float w_max = 2*M_PI/k_min;
-  std::cout<<"wl min-max "<<w_min<<" - "<<w_max<<std::endl;
-  std::cout<<"freq min-max "<<f_min<<" - "<<f_max<<std::endl;
-
-  int nb_wl = winsize/2;
-  nb_wl -= shift_b + shift_u;
-  if (nb_wl <= 0) {
+    float f_min = freq_step;
+    float f_max = sample_rate;
+    float k_min = pow((2*M_PI*f_min), 2)/9.81;
+    float k_max = pow((2*M_PI*f_max), 2)/9.81;
+    float w_min = 2*M_PI/k_max;
+    float w_max = 2*M_PI/k_min;
+    std::cout<<"wl min-max "<<w_min<<" - "<<w_max<<std::endl;
+    std::cout<<"freq min-max "<<f_min<<" - "<<f_max<<std::endl;
+    
+    int nb_wl = winsize/2;
+    nb_wl -= shift_b + shift_u;
+    if (nb_wl <= 0) {
     nb_wl = 1;
     shift_u = 0;
   }
@@ -219,7 +221,7 @@ OP_ERROR SOP_Boundary_Points::cookMySop(OP_Context &context) {
       // }
       ++i;
    }
-    inputPoints.front().setName("bp_sop_test");
+   inputPoints.front().setName("bp_sop_test");
    // middle->setName("bp_middle_test");
 
   
@@ -233,6 +235,7 @@ OP_ERROR SOP_Boundary_Points::cookMySop(OP_Context &context) {
      uint i = 0;
      for(GA_Iterator itfs = range.begin(); itfs != range.end(); ++itfs) {
        UT_Vector3 pos_fs = fs->getPos3(*itfs);
+       pos_fs(1) = 0;
        gdp->getTopology().wireVertexPoint(vtxoff+i,ptoff+i);
       gdp->setPos3(ptoff+i, pos_fs);
       ++i;
@@ -354,14 +357,20 @@ OP_ERROR SOP_Boundary_Points::cookMySop(OP_Context &context) {
   GA_Range rangefs = fs->getPointRange();
   GA_Range rangegdp = gdp->getPointRange();
   GA_Iterator itfs = rangefs.begin();
-  GA_Iterator itgdp = rangegdp.begin();
+  // GA_Iterator itgdp = rangegdp.begin();
   std::list<InputPoint>::iterator it = inputPoints.begin();
-  for(; itfs != rangefs.end(); ++itfs, ++itgdp, ++it) {
+  //std::cout<<"ranges "<<rangefs.getEntries()<<" "<<rangegdp.getEntries()<<" "<<inputPoints.size()<<std::endl;
+  
+   if (rangefs.getEntries() != inputPoints.size()) {
+     addError(SOP_ATTRIBUTE_INVALID, "not the right number of inputpoints");
+     return error();
+   }
+   for(; itfs != rangefs.end(); ++itfs, /*++itgdp,*/ ++it) {
     UT_Vector3 pos_fs = fs->getPos3(*itfs);
     (*it).update(pos_fs(1));
-    // if (itgdp == rangegdp.begin()) {
-    //   std::cout<<"pos height "<<pos_fs(1)<<std::endl;
-    // }
+     // if (itgdp == rangegdp.begin()) {
+     //   std::cout<<"pos height "<<pos_fs(1)<<std::endl;
+     // }
    }
  
   
@@ -386,36 +395,36 @@ OP_ERROR SOP_Boundary_Points::cookMySop(OP_Context &context) {
       GA_Range range_bp = prim->getPointRange();
       it = inputPoints.begin();
       for(GA_Iterator itbp = range_bp.begin(); itbp != range_bp.end(); ++itbp, ++it) {
-	COMPLEX a = COMPLEX((*it).spectrum_re[w+shift_u+1], (*it).spectrum_im[w+shift_u+1]);
-	a /= (FLOAT)winsize/2.0;
-	// if (itbp == range_bp.begin()) {
-	//   std::cout<<"ampli0  "<<a<<std::endl;
-	// }
-	a*= exp(COMPLEX(0, 1)*(om*(float)(fr - winsize/2)*dt_));
-	a /= 0.272192;
-	//std::cout<<"ampli from spectrum "<<a<<std::endl;
-	// if ((fr/as - 2) <= 100) {
-	//   FLOAT r = sqrt(pow((*it).getPos()(0), 2) + pow((*it).getPos()(1), 2));
-	//   //	  std::cout<<"r "<<r<<std::endl;
-	//   a = COMPLEX(5, 0)*fund_solution(k*r)*damping(0.01, r, k);;
-	//   //	  std::cout<<"ampli not from spectrum "<<a<<std::endl;//<<" "<<fund_solution(k*r)*damping(0.01, r, k)<<std::endl;
-	// } else {
-	//   a = 0;
-	// }
+ 	COMPLEX a = COMPLEX((*it).spectrum_re[w+shift_u+1], (*it).spectrum_im[w+shift_u+1]);
+ 	a /= (FLOAT)winsize/2.0;
+ 	// if (itbp == range_bp.begin()) {
+ 	//   std::cout<<"ampli0  "<<a<<std::endl;
+ 	// }
+ 	a*= exp(COMPLEX(0, 1)*(om*(float)(fr - winsize/2)*dt_));
+ 	a /= 0.272192;
+ 	//std::cout<<"ampli from spectrum "<<a<<std::endl;
+ 	// if ((fr/as - 2) <= 100) {
+ 	//   FLOAT r = sqrt(pow((*it).getPos()(0), 2) + pow((*it).getPos()(1), 2));
+ 	//   //	  std::cout<<"r "<<r<<std::endl;
+ 	//   a = COMPLEX(5, 0)*fund_solution(k*r)*damping(0.01, r, k);;
+ 	//   //	  std::cout<<"ampli not from spectrum "<<a<<std::endl;//<<" "<<fund_solution(k*r)*damping(0.01, r, k)<<std::endl;
+ 	// } else {
+ 	//   a = 0;
+ 	// }
 
-	ampli_attrib.set(*itbp, 0, real(a));
-	ampli_attrib.set(*itbp, 1, imag(a));
-	 // if (itbp == range_bp.begin()) {
-	 //   std::cout<<"wl "<<w<<" "<<wl<<"    ampli "<<a<<std::endl;
-	 // }
-	// if (fr < 200) {
-	//   ampli_attrib.set(*itbp, 0, 1);
-	//   ampli_attrib.set(*itbp, 1, 0);
-	// } else {
-	//   ampli_attrib.set(*itbp, 0, 0);
-	//   ampli_attrib.set(*itbp, 1, 0);
-	// }
-	//	    std::cout<<"ampli bp "<<w<<" "<<*itbp<<" "<<(*it).spectrum_re[w]<<" "<<(*it).spectrum_im[w]<<std::endl;
+ 	ampli_attrib.set(*itbp, 0, real(a));
+ 	ampli_attrib.set(*itbp, 1, imag(a));
+ 	 // if (itbp == range_bp.begin()) {
+ 	 //   std::cout<<"wl "<<w<<" "<<wl<<"    ampli "<<a<<std::endl;
+ 	 // }
+ 	// if (fr < 200) {
+ 	//   ampli_attrib.set(*itbp, 0, 1);
+ 	//   ampli_attrib.set(*itbp, 1, 0);
+ 	// } else {
+ 	//   ampli_attrib.set(*itbp, 0, 0);
+ 	//   ampli_attrib.set(*itbp, 1, 0);
+ 	// }
+ 	//	    std::cout<<"ampli bp "<<w<<" "<<*itbp<<" "<<(*it).spectrum_re[w]<<" "<<(*it).spectrum_im[w]<<std::endl;
       }
       // for (uint i = 0; i < winsize/2; ++i) {
       //   spectrum_attrib.set(*itgdp, 2*i, (*it).spectrum_re[i]);

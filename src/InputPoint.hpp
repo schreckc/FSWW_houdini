@@ -32,7 +32,8 @@ private:
   FLOAT frequency_step;
   
   std::list<FLOAT> samples;
-
+  std::string name;
+  
 public:
   FLOAT *spectrum_re;
   FLOAT *spectrum_im;
@@ -43,8 +44,8 @@ public:
 
   uint t;
 
-  std::string name;
-  
+  bool rec;
+    
 public:
   InputPoint() {
     pos = VEC2(0, 0);
@@ -58,6 +59,7 @@ public:
     
     t = 0;
     name = "test";
+    rec = false;
   }
   InputPoint(uint nb_samples, FLOAT time_step) {
     pos = VEC2(0, 0);
@@ -80,17 +82,18 @@ public:
     }
     t = 0;
     name = "test";
+    rec = false;
   }
     
   ~InputPoint() {
-     if (spectrum_re != NULL) {
-       delete[]spectrum_re;
-       spectrum_re = NULL;
-     }
-     if (spectrum_im != NULL) {
-       delete[]spectrum_im;
-       spectrum_im = NULL;
-     }
+     // if (spectrum_re != NULL) {
+     //   delete[]spectrum_re;
+     //   spectrum_re = NULL;
+     // }
+     // if (spectrum_im != NULL) {
+     //   delete[]spectrum_im;
+     //   spectrum_im = NULL;
+     // }
     // plotSpectrum();
     // plotSpectrogram();
     // plotSamples();
@@ -112,8 +115,10 @@ public:
   }
   
   void update(FLOAT next_sample) {
-    samples.push_front(next_sample);
-    //    samples.pop_back();
+     samples.push_front(next_sample);
+     //  if (!rec) {
+       samples.pop_back();
+       // }
     if (t == 1/*window_size / 16*/) {
       computeSpectrum();
       t = 0;
@@ -157,13 +162,13 @@ public:
     spectrogram.push_back(power_spectrum);
     spectrogram_re.push_back(spec_re);
     spectrogram_im.push_back(spec_im);
-    // if (spectrogram.size() > 2048) {
-    //   // plotSpectrum();
-    //   // plotSpectrogram();
-    //   // plotSamples();
-    //   //    exit(0);
-    //   spectrogram.pop_front();
-    // }
+    if (/*!rec &&*/ spectrogram.size() > 256) {
+      // plotSpectrum();
+      // plotSpectrogram();
+      // plotSamples();
+      //    exit(0);
+      spectrogram.pop_front();
+    }
   
     delete[] in_re;
     delete[] in_im;
